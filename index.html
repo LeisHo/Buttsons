@@ -108,6 +108,16 @@
     margin-bottom: 3px;
     color: #b7bac2;
   }
+  .dev-checkbox-label {
+    display: flex !important;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+  }
+  .dev-checkbox-label input[type="checkbox"] {
+    flex: none;
+    accent-color: #5aa9ff;
+  }
   .dev-row-controls {
     display: flex;
     align-items: center;
@@ -336,7 +346,8 @@
     yOffset: 0,
     colSpacing: 85,
     rowSpacing: 61,
-    altRowXOffset: 45
+    altRowXOffset: 45,
+    cumulativeRowOffset: false
   };
 
   var SLIDER_CONFIG = [
@@ -353,7 +364,11 @@
     { key: "yOffset",        label: "Y Offset of Whole Array",     min: -1500, max: 1500, step: 1,    unit: "px", cssVar: "--array-y-offset" },
     { key: "colSpacing",     label: "X Spacing (per button/row)",  min: 10,    max: 400,  step: 1,    unit: "px", regen: true },
     { key: "rowSpacing",     label: "Y Spacing (per row)",         min: 10,    max: 400,  step: 1,    unit: "px", regen: true },
-    { key: "altRowXOffset",  label: "X Offset (Alternating Rows)", min: -300,  max: 300,  step: 1,    unit: "px", regen: true }
+    { key: "altRowXOffset",  label: "X Offset (Row Stagger)",      min: -300,  max: 300,  step: 1,    unit: "px", regen: true }
+  ];
+
+  var CHECKBOX_CONFIG = [
+    { key: "cumulativeRowOffset", label: "Cumulative Row Offset (each row shifts further than the last, instead of alternating)", regen: true }
   ];
 
   function isDevAllowed() {
@@ -441,9 +456,21 @@
     var colSp = settings.colSpacing;
     var rowSp = settings.rowSpacing;
     var altOffset = settings.altRowXOffset;
-    var basePad = Math.max(0, -altOffset);
+    var cumulative = !!settings.cumulativeRowOffset;
 
-    var totalW = (cols - 1) * colSp + 100 + Math.abs(altOffset);
+    // Alternating: only odd rows shift, by a fixed amount. Cumulative: each row shifts
+    // further than the last (row r offset = r * altOffset) -- a diagonal/staircase drift
+    // instead of a simple brick pattern.
+    function rowXOffset(r) {
+      return cumulative ? r * altOffset : (r % 2 === 1 ? altOffset : 0);
+    }
+
+    var extremeOffset = cumulative ? (rows - 1) * altOffset : altOffset;
+    var minOffset = Math.min(0, extremeOffset);
+    var maxOffset = Math.max(0, extremeOffset);
+    var basePad = -minOffset;
+
+    var totalW = (cols - 1) * colSp + 100 + (maxOffset - minOffset);
     var totalH = (rows - 1) * rowSp + 100 * 1.02597;
 
     stage.style.width = totalW + "px";
@@ -454,7 +481,7 @@
     var parts = [];
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
-        var x = basePad + c * colSp + (r % 2 === 1 ? altOffset : 0);
+        var x = basePad + c * colSp + rowXOffset(r);
         var y = r * rowSp;
         var clipId = "extclip-" + r + "-" + c;
         parts.push(
@@ -581,6 +608,30 @@
       });
 
       makeValueEditable(cfg, valueEl);
+    });
+
+    CHECKBOX_CONFIG.forEach(function (cfg) {
+      var row = document.createElement("div");
+      row.className = "dev-row dev-row-checkbox";
+
+      var label = document.createElement("label");
+      label.className = "dev-checkbox-label";
+      label.htmlFor = "checkbox-" + cfg.key;
+
+      var checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.id = "checkbox-" + cfg.key;
+      checkbox.checked = !!settings[cfg.key];
+
+      label.appendChild(checkbox);
+      label.appendChild(document.createTextNode(" " + cfg.label));
+      row.appendChild(label);
+      slidersHost.appendChild(row);
+
+      checkbox.addEventListener("change", function () {
+        settings[cfg.key] = checkbox.checked;
+        if (cfg.regen) regenerateGrid();
+      });
     });
   }
 
