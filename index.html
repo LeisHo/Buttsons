@@ -405,59 +405,34 @@
       "translate(-50%, -50%) translate(" + settings.xOffset + "px, " + settings.yOffset + "px) scale(" + activeScale + ")";
   }
 
-  var EXT_NATURAL_SVG_HEIGHT = 4690.21;          // the bottom-extension symbol's own natural height, in its own SVG user units
+  var EXT_NATURAL_SVG_HEIGHT = 4690.21; // the bottom-extension symbol's own natural height, in its own SVG user units
   // CSS transform: translateY(Npx) on an element INSIDE an SVG resolves in that SVG's
-  // OWN user units, not literal CSS pixels -- so --button-height/--cell-height-gain
-  // (fed straight into such a translateY) are already directly in SVG user units here.
+  // OWN user units, not literal CSS pixels -- so --cell-height-gain (fed straight into
+  // such a translateY) is already directly in SVG user units here.
 
-  // The extension moves up together with the button (shared .dome-wrap transform), by
-  // buttonHeight + this cell's own accumulated gain -- so a raised button's shaft needs
-  // that same amount of EXTRA length revealed to still reach the true screen bottom.
-  // Without this, every cell's clip was computed as if it sat at its static, unraised
-  // position, undershooting by exactly the raise amount (worse the more a button had
-  // climbed) -- this is the cause of both "mask looks too low" and "shorter at the
-  // bottom" (rows/cells with more accumulated raise were undershooting more).
-  function cellRaiseSvgUnits(cell) {
+  // The extension is hidden at rest and only revealed as the button grows taller from
+  // repeated clicks -- its visible length tracks accumulated gain 1:1, not the button's
+  // static resting height and not the array's layout position/viewport height (an
+  // earlier, incorrect reading of "the higher it's placed, the more it's revealed" as
+  // being about on-screen array position rather than how far the button has grown).
+  function applyClipHeight(cell) {
     var gain = parseFloat(cell.style.getPropertyValue("--cell-height-gain")) || 0;
-    return settings.buttonHeight + gain;
-  }
-
-  function applyClipHeight(cell, cellTopScreenY, activeScale, viewportH) {
-    var requiredScreenH = Math.max(0, viewportH - cellTopScreenY);
-    // screen px -> SVG user units: divide out the cell-svg's own declared-px-per-user-unit
-    // scale (100/589.79), then the outer array scale.
-    var requiredSvgUnits = (requiredScreenH / (100 / 589.79)) / activeScale;
-    var clipSvgUnits = Math.min(EXT_NATURAL_SVG_HEIGHT, requiredSvgUnits + cellRaiseSvgUnits(cell));
+    var clipSvgUnits = Math.min(EXT_NATURAL_SVG_HEIGHT, gain);
     var rect = cell.querySelector(".ext-clip-rect");
     if (rect) rect.setAttribute("height", clipSvgUnits);
   }
 
-  // Clips each button's bottom-extension shaft (via a real SVG clipPath, since each
-  // button is one self-contained <svg> group) so it stops exactly at the browser's
-  // bottom edge -- a button placed higher on screen (or raised further by accumulated
-  // gain) needs more of the shaft revealed.
+  // Every cell starts fully hidden (gain 0 on a fresh grid) -- called once per
+  // regenerateGrid() rather than needing any per-cell screen-position measurement.
   function updateExtensionClips() {
-    var activeScale = isMobileActive() ? settings.mobileArrayScale : settings.arrayScale;
-    var viewportH = window.innerHeight;
     var cells = stage.querySelectorAll(".btn-cell");
-
-    // Read pass (batched, no interleaved writes, to avoid layout thrashing)
-    var tops = new Array(cells.length);
-    for (var i = 0; i < cells.length; i++) {
-      tops[i] = cells[i].getBoundingClientRect().top;
-    }
-
-    // Write pass
-    for (var j = 0; j < cells.length; j++) {
-      applyClipHeight(cells[j], tops[j], activeScale, viewportH);
-    }
+    for (var i = 0; i < cells.length; i++) applyClipHeight(cells[i]);
   }
 
   // Cheap single-cell recompute, used right after a press/release changes just this
   // cell's own accumulated gain -- avoids re-sweeping every cell on every click.
   function updateOneCellExtensionClip(cell) {
-    var activeScale = isMobileActive() ? settings.mobileArrayScale : settings.arrayScale;
-    applyClipHeight(cell, cell.getBoundingClientRect().top, activeScale, window.innerHeight);
+    applyClipHeight(cell);
   }
 
   function regenerateGrid() {
@@ -525,7 +500,6 @@
 
     if (cfg.key === "arrayScale" || cfg.key === "mobileArrayScale" || cfg.key === "xOffset" || cfg.key === "yOffset") {
       applyArrayTransform();
-      updateExtensionClips();
     }
     if (cfg.regen && !opts.skipRegen) {
       regenerateGrid();
@@ -736,17 +710,7 @@
 
   // Re-apply the active (mobile vs desktop) scale live when the breakpoint is crossed
   // (device rotation, browser resize, or a desktop window resized narrower than 767px).
-  MOBILE_MEDIA_QUERY.addEventListener("change", function () {
-    applyArrayTransform();
-    updateExtensionClips();
-  });
-
-  // Viewport height changes (resize, rotation) shift where "the bottom of the browser" is.
-  var resizeClipTimer = null;
-  window.addEventListener("resize", function () {
-    clearTimeout(resizeClipTimer);
-    resizeClipTimer = setTimeout(updateExtensionClips, 100);
-  });
+  MOBILE_MEDIA_QUERY.addEventListener("change", applyArrayTransform);
 
   // ---- Init ----
   if (isDevAllowed()) {
