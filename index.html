@@ -455,10 +455,10 @@
           "<defs><clipPath id=\"" + clipId + "\" clipPathUnits=\"userSpaceOnUse\">" +
           '<rect class="ext-clip-rect" x="0" y="0" width="589.79" height="0"></rect>' +
           "</clipPath></defs>" +
-          '<use href="#sym-backing" width="589.79" height="605.11"></use>' +
           '<g class="dome-wrap" clip-path="url(#' + clipId + ')">' +
           '<use href="#sym-bottom-extension" width="589.79" height="4690.21"></use>' +
           "</g>" +
+          '<use href="#sym-backing" width="589.79" height="605.11"></use>' +
           '<g class="dome-wrap">' +
           '<use class="dome-up-use" href="#sym-dome-up" width="589.79" height="605.11"></use>' +
           '<use class="dome-pressed-use" href="#sym-dome-pressed" width="589.79" height="605.11"></use>' +
@@ -586,10 +586,13 @@
 
   // ---- Press interaction (event delegation, multi-touch aware) ----
   var activePointers = new Map();
+  var pressStartedAt = new WeakMap();
+  var HOLD_THRESHOLD_MS = 400; // >= this counts as "held", not a quick click
 
   function pressCell(cell) {
     if (cell.classList.contains("pressed")) return;
-    var movers = cell.querySelectorAll(".dome-wrap, .ext-clip");
+    pressStartedAt.set(cell, Date.now());
+    var movers = cell.querySelectorAll(".dome-wrap");
     for (var i = 0; i < movers.length; i++) movers[i].style.transition = "none";
     void cell.offsetHeight; // force reflow so the transition:none takes effect before the class/transform change below
     cell.classList.add("pressed");
@@ -598,14 +601,25 @@
   function releaseCell(cell) {
     if (!cell.classList.contains("pressed")) return;
 
-    // Each completed press/release cycle permanently raises this cell's own resting
-    // height by heightGainPerClick -- read the accumulated gain back off the cell itself
-    // (not a shared/global value) so every button climbs independently.
-    var currentGain = parseFloat(cell.style.getPropertyValue("--cell-height-gain")) || 0;
-    var newGain = currentGain + settings.heightGainPerClick;
+    // A quick click-and-release permanently raises this cell's own resting height by
+    // heightGainPerClick (read back off the cell itself, not a shared value, so every
+    // button climbs independently). A deliberate press-and-HOLD does the opposite --
+    // releasing after holding resets this cell straight back to its default height,
+    // discarding any gain accumulated from prior quick clicks.
+    var startedAt = pressStartedAt.get(cell);
+    var heldMs = startedAt ? Date.now() - startedAt : 0;
+    var wasHeld = heldMs >= HOLD_THRESHOLD_MS;
+
+    var newGain;
+    if (wasHeld) {
+      newGain = 0;
+    } else {
+      var currentGain = parseFloat(cell.style.getPropertyValue("--cell-height-gain")) || 0;
+      newGain = currentGain + settings.heightGainPerClick;
+    }
     cell.style.setProperty("--cell-height-gain", newGain);
 
-    var movers = cell.querySelectorAll(".dome-wrap, .ext-clip");
+    var movers = cell.querySelectorAll(".dome-wrap");
     for (var i = 0; i < movers.length; i++) {
       movers[i].style.transition = "transform " + settings.releaseMs + "ms ease-out";
     }
