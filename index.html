@@ -327,9 +327,9 @@
     mobileArrayScale: 1.58,
     colCount: 16,
     rowCount: 10,
-    buttonHeight: 79,
-    clickIntensity: 80,
-    heightGainPerClick: 3,
+    buttonHeight: 150,
+    clickIntensity: 120,
+    heightGainPerClick: 70,
     holdThresholdMs: 500,
     releaseMs: 0,
     xOffset: 34,
@@ -344,9 +344,9 @@
     { key: "mobileArrayScale", label: "Scale of Array (Mobile)",   min: 0.1,   max: 3,    step: 0.01, unit: "" },
     { key: "colCount",       label: "Column Count",                min: 1,     max: 50,   step: 1,    unit: "", integer: true, regen: true },
     { key: "rowCount",       label: "Row Count",                   min: 1,     max: 50,   step: 1,    unit: "", integer: true, regen: true },
-    { key: "buttonHeight",   label: "Button Height",               min: 0,     max: 80,   step: 1,    unit: "px", cssVar: "--button-height" },
-    { key: "clickIntensity", label: "Button Click Intensity",      min: 0,     max: 80,   step: 1,    unit: "px", cssVar: "--click-intensity" },
-    { key: "heightGainPerClick", label: "Height Gain Per Click",   min: 0,     max: 30,   step: 0.5,  unit: "px" },
+    { key: "buttonHeight",   label: "Button Height",               min: 0,     max: 200,  step: 1,    unit: "px", cssVar: "--button-height" },
+    { key: "clickIntensity", label: "Button Click Intensity",      min: 0,     max: 200,  step: 1,    unit: "px", cssVar: "--click-intensity" },
+    { key: "heightGainPerClick", label: "Height Gain Per Click",   min: 0,     max: 100,  step: 0.5,  unit: "px" },
     { key: "holdThresholdMs", label: "Hold Threshold (Reset)",     min: 100,   max: 2000, step: 50,   unit: "ms" },
     { key: "releaseMs",      label: "Release Speed",               min: 0,     max: 1000, step: 10,   unit: "ms" },
     { key: "xOffset",        label: "X Offset of Whole Array",     min: -1500, max: 1500, step: 1,    unit: "px", cssVar: "--array-x-offset" },
@@ -405,13 +405,37 @@
       "translate(-50%, -50%) translate(" + settings.xOffset + "px, " + settings.yOffset + "px) scale(" + activeScale + ")";
   }
 
-  var EXT_NATURAL_LOCAL_HEIGHT = 100 * 7.95234; // unscaled px height of the full bottom-extension artwork
-  var SVG_UNITS_PER_LOCAL_PX = 589.79 / 100;     // local px -> the shared 589.79-wide SVG coordinate space
+  var EXT_NATURAL_SVG_HEIGHT = 4690.21;          // the bottom-extension symbol's own natural height, in its own SVG user units
+  // CSS transform: translateY(Npx) on an element INSIDE an SVG resolves in that SVG's
+  // OWN user units, not literal CSS pixels -- so --button-height/--cell-height-gain
+  // (fed straight into such a translateY) are already directly in SVG user units here.
+
+  // The extension moves up together with the button (shared .dome-wrap transform), by
+  // buttonHeight + this cell's own accumulated gain -- so a raised button's shaft needs
+  // that same amount of EXTRA length revealed to still reach the true screen bottom.
+  // Without this, every cell's clip was computed as if it sat at its static, unraised
+  // position, undershooting by exactly the raise amount (worse the more a button had
+  // climbed) -- this is the cause of both "mask looks too low" and "shorter at the
+  // bottom" (rows/cells with more accumulated raise were undershooting more).
+  function cellRaiseSvgUnits(cell) {
+    var gain = parseFloat(cell.style.getPropertyValue("--cell-height-gain")) || 0;
+    return settings.buttonHeight + gain;
+  }
+
+  function applyClipHeight(cell, cellTopScreenY, activeScale, viewportH) {
+    var requiredScreenH = Math.max(0, viewportH - cellTopScreenY);
+    // screen px -> SVG user units: divide out the cell-svg's own declared-px-per-user-unit
+    // scale (100/589.79), then the outer array scale.
+    var requiredSvgUnits = (requiredScreenH / (100 / 589.79)) / activeScale;
+    var clipSvgUnits = Math.min(EXT_NATURAL_SVG_HEIGHT, requiredSvgUnits + cellRaiseSvgUnits(cell));
+    var rect = cell.querySelector(".ext-clip-rect");
+    if (rect) rect.setAttribute("height", clipSvgUnits);
+  }
 
   // Clips each button's bottom-extension shaft (via a real SVG clipPath, since each
   // button is one self-contained <svg> group) so it stops exactly at the browser's
-  // bottom edge -- a button placed higher on screen needs more of the shaft revealed.
-  // Uses each cell's own resting (unpressed) screen position, not the live press offset.
+  // bottom edge -- a button placed higher on screen (or raised further by accumulated
+  // gain) needs more of the shaft revealed.
   function updateExtensionClips() {
     var activeScale = isMobileActive() ? settings.mobileArrayScale : settings.arrayScale;
     var viewportH = window.innerHeight;
@@ -425,12 +449,15 @@
 
     // Write pass
     for (var j = 0; j < cells.length; j++) {
-      var requiredScreenH = Math.max(0, viewportH - tops[j]);
-      var requiredLocalH = requiredScreenH / activeScale;
-      var clipLocalH = Math.min(EXT_NATURAL_LOCAL_HEIGHT, requiredLocalH);
-      var rect = cells[j].querySelector(".ext-clip-rect");
-      if (rect) rect.setAttribute("height", clipLocalH * SVG_UNITS_PER_LOCAL_PX);
+      applyClipHeight(cells[j], tops[j], activeScale, viewportH);
     }
+  }
+
+  // Cheap single-cell recompute, used right after a press/release changes just this
+  // cell's own accumulated gain -- avoids re-sweeping every cell on every click.
+  function updateOneCellExtensionClip(cell) {
+    var activeScale = isMobileActive() ? settings.mobileArrayScale : settings.arrayScale;
+    applyClipHeight(cell, cell.getBoundingClientRect().top, activeScale, window.innerHeight);
   }
 
   function regenerateGrid() {
@@ -609,20 +636,18 @@
     // A quick click-and-release permanently raises this cell's own resting height by
     // heightGainPerClick (read back off the cell itself, not a shared value, so every
     // button climbs independently). A deliberate press-and-HOLD does the opposite --
-    // releasing after holding resets this cell straight back to its default height,
-    // discarding any gain accumulated from prior quick clicks.
+    // releasing after holding shifts the button back DOWN by one heightGainPerClick
+    // step (not a full reset), floored at 0/default so repeated holds can't go negative.
     var startedAt = pressStartedAt.get(cell);
     var heldMs = startedAt ? Date.now() - startedAt : 0;
     var wasHeld = heldMs >= settings.holdThresholdMs;
 
-    var newGain;
-    if (wasHeld) {
-      newGain = 0;
-    } else {
-      var currentGain = parseFloat(cell.style.getPropertyValue("--cell-height-gain")) || 0;
-      newGain = currentGain + settings.heightGainPerClick;
-    }
+    var currentGain = parseFloat(cell.style.getPropertyValue("--cell-height-gain")) || 0;
+    var newGain = wasHeld
+      ? Math.max(0, currentGain - settings.heightGainPerClick)
+      : currentGain + settings.heightGainPerClick;
     cell.style.setProperty("--cell-height-gain", newGain);
+    updateOneCellExtensionClip(cell);
 
     var movers = cell.querySelectorAll(".dome-wrap");
     for (var i = 0; i < movers.length; i++) {
