@@ -47,27 +47,21 @@
     -webkit-user-select: none;
   }
 
-  .btn-cell svg { display: block; width: 100%; height: 100%; overflow: visible; }
-
-  .ext-clip {
+  .cell-svg {
+    display: block;
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
-    overflow: hidden;
-  }
-  .ext-clip svg {
-    display: block;
     width: calc(var(--btn-w) * 1px);
     height: calc(var(--btn-w) * var(--ext-aspect) * 1px);
     overflow: visible;
   }
 
-  .dome-wrap, .ext-clip {
+  .dome-wrap {
     transform: translateY(calc((var(--button-height) + var(--cell-height-gain, 0)) * -1px));
     will-change: transform;
   }
-  .btn-cell.pressed .dome-wrap, .btn-cell.pressed .ext-clip {
+  .btn-cell.pressed .dome-wrap {
     transform: translateY(calc((var(--button-height) + var(--cell-height-gain, 0) - var(--click-intensity)) * -1px));
   }
 
@@ -325,19 +319,19 @@
   var STORAGE_KEY = "buttsonsArraySettings";
 
   var DEFAULT_SETTINGS = {
-    arrayScale: 1.63,
-    mobileArrayScale: 1,
-    colCount: 34,
-    rowCount: 19,
+    arrayScale: 1.57,
+    mobileArrayScale: 1.58,
+    colCount: 16,
+    rowCount: 10,
     buttonHeight: 79,
     clickIntensity: 80,
     heightGainPerClick: 3,
     releaseMs: 0,
-    xOffset: 525,
+    xOffset: 34,
     yOffset: 0,
-    colSpacing: 84,
+    colSpacing: 85,
     rowSpacing: 61,
-    altRowXOffset: 0
+    altRowXOffset: 45
   };
 
   var SLIDER_CONFIG = [
@@ -406,8 +400,10 @@
   }
 
   var EXT_NATURAL_LOCAL_HEIGHT = 100 * 7.95234; // unscaled px height of the full bottom-extension artwork
+  var SVG_UNITS_PER_LOCAL_PX = 589.79 / 100;     // local px -> the shared 589.79-wide SVG coordinate space
 
-  // Clips each button's bottom-extension shaft so it stops exactly at the browser's
+  // Clips each button's bottom-extension shaft (via a real SVG clipPath, since each
+  // button is one self-contained <svg> group) so it stops exactly at the browser's
   // bottom edge -- a button placed higher on screen needs more of the shaft revealed.
   // Uses each cell's own resting (unpressed) screen position, not the live press offset.
   function updateExtensionClips() {
@@ -425,9 +421,9 @@
     for (var j = 0; j < cells.length; j++) {
       var requiredScreenH = Math.max(0, viewportH - tops[j]);
       var requiredLocalH = requiredScreenH / activeScale;
-      var clipH = Math.min(EXT_NATURAL_LOCAL_HEIGHT, requiredLocalH);
-      var clipDiv = cells[j].querySelector(".ext-clip");
-      if (clipDiv) clipDiv.style.height = clipH + "px";
+      var clipLocalH = Math.min(EXT_NATURAL_LOCAL_HEIGHT, requiredLocalH);
+      var rect = cells[j].querySelector(".ext-clip-rect");
+      if (rect) rect.setAttribute("height", clipLocalH * SVG_UNITS_PER_LOCAL_PX);
     }
   }
 
@@ -452,22 +448,22 @@
       for (var c = 0; c < cols; c++) {
         var x = basePad + c * colSp + (r % 2 === 1 ? altOffset : 0);
         var y = r * rowSp;
+        var clipId = "extclip-" + r + "-" + c;
         parts.push(
           '<div class="btn-cell" style="left:' + x + 'px;top:' + y + 'px" data-r="' + r + '" data-c="' + c + '">' +
-          '<svg viewBox="0 0 589.79 605.11" preserveAspectRatio="xMidYMid meet">' +
-          '<use href="#sym-backing"></use>' +
-          "</svg>" +
-          '<div class="ext-clip">' +
-          '<svg viewBox="0 0 589.79 4690.21" preserveAspectRatio="xMinYMin meet">' +
-          '<use href="#sym-bottom-extension"></use>' +
-          "</svg>" +
-          "</div>" +
-          '<svg viewBox="0 0 589.79 605.11" preserveAspectRatio="xMidYMid meet">' +
-          '<g class="dome-wrap">' +
-          '<use class="dome-up-use" href="#sym-dome-up"></use>' +
-          '<use class="dome-pressed-use" href="#sym-dome-pressed"></use>' +
+          '<svg class="cell-svg" viewBox="0 0 589.79 4690.21" preserveAspectRatio="xMinYMin meet">' +
+          "<defs><clipPath id=\"" + clipId + "\" clipPathUnits=\"userSpaceOnUse\">" +
+          '<rect class="ext-clip-rect" x="0" y="0" width="589.79" height="0"></rect>' +
+          "</clipPath></defs>" +
+          '<use href="#sym-backing" width="589.79" height="605.11"></use>' +
+          '<g class="dome-wrap" clip-path="url(#' + clipId + ')">' +
+          '<use href="#sym-bottom-extension" width="589.79" height="4690.21"></use>' +
           "</g>" +
-          '<use href="#sym-base"></use>' +
+          '<g class="dome-wrap">' +
+          '<use class="dome-up-use" href="#sym-dome-up" width="589.79" height="605.11"></use>' +
+          '<use class="dome-pressed-use" href="#sym-dome-pressed" width="589.79" height="605.11"></use>' +
+          "</g>" +
+          '<use href="#sym-base" width="589.79" height="605.11"></use>' +
           "</svg>" +
           "</div>"
         );
