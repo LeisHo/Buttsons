@@ -94,6 +94,18 @@
     transform: translateY(calc(var(--ext-mask-y-pos, 0) * 1px));
   }
 
+  /* Extension Back's own scale -- independent of the front layer, anchored at its top
+     edge (matches how Backing/the Mask are anchored) so scaling grows/shrinks it downward
+     rather than from its center. transform-box: fill-box makes the percentage origin
+     resolve against this element's own rendered bounds, not the outer SVG's viewBox
+     (SVG's default transform-box). Still clipped by the shared .ext-wrap clip-path, which
+     clips post-transform content in the parent group's own coordinate space. */
+  .ext-back-use {
+    transform: scale(var(--ext-back-scale, 1));
+    transform-box: fill-box;
+    transform-origin: 50% 0%;
+  }
+
   /* Debug boundary overlay -- red outline of the extension symbol's full raw extent,
      static (shares Base/Button's untransformed coordinate frame directly, no offset,
      doesn't track press/gain) so toggling it or clicking buttons never moves it --
@@ -559,6 +571,7 @@
     extYOffset: -13,
     extMaskYOffset: -58,
     extMaskYPos: 0,
+    extBackScale: 1,
     debugShowExtBoundary: false,
 
     // Built-in "Dev Panel" meta-styling group (CLAUDE.md 12i) -- the panel's own
@@ -582,7 +595,7 @@
       devpanel: ["devTitleFontSize", "devTabFontSize", "devGroupTitleFontSize", "devSettingTitleFontSize", "devBodyFontSize", "devPanelOpacity", "devBgColor", "devTitleColor", "devTextColor"],
       grid: ["arrayScale", "mobileArrayScale", "colCount", "rowCount"],
       spacing: ["xOffset", "yOffset", "colSpacing", "rowSpacing", "altRowXOffset", "cumulativeRowOffset"],
-      press: ["buttonHeight", "clickIntensity", "extYOffset", "extMaskYOffset", "extMaskYPos", "heightGainPerClick", "holdThresholdMs", "releaseMs"],
+      press: ["buttonHeight", "clickIntensity", "extYOffset", "extMaskYOffset", "extMaskYPos", "extBackScale", "heightGainPerClick", "holdThresholdMs", "releaseMs"],
       debug: ["debugShowExtBoundary"]
     },
     _panelGeometryDesktop: null,
@@ -612,6 +625,7 @@
     { key: "extYOffset",     label: "Extension Y Offset (vs Button)", min: -300, max: 300, step: 1,    unit: "px", cssVar: "--ext-y-offset" },
     { key: "extMaskYOffset", label: "Extension Mask Y Offset",     min: -600,  max: 600,  step: 1,    unit: "px" },
     { key: "extMaskYPos",    label: "Extension Mask Y Position",   min: -600,  max: 600,  step: 1,    unit: "px", cssVar: "--ext-mask-y-pos" },
+    { key: "extBackScale",   label: "Extension Back Scale",        min: 0.1,   max: 3,    step: 0.01, unit: "",   cssVar: "--ext-back-scale" },
     { key: "heightGainPerClick", label: "Height Gain Per Click",   min: 0,     max: 100,  step: 0.5,  unit: "px" },
     { key: "holdThresholdMs", label: "Hold Threshold (Reset)",     min: 100,   max: 2000, step: 50,   unit: "ms" },
     { key: "releaseMs",      label: "Release Speed",               min: 0,     max: 1000, step: 10,   unit: "ms" },
@@ -866,7 +880,7 @@
           '<use href="#sym-backing" width="589.79" height="605.11"></use>' +
           // Both extension layers (back + front) share the same clip-path reveal window.
           '<g class="dome-wrap ext-wrap" clip-path="url(#' + clipId + ')">' +
-          '<use href="#sym-bottom-extension-back" width="589.79" height="4690.21"></use>' +
+          '<use class="ext-back-use" href="#sym-bottom-extension-back" width="589.79" height="4690.21"></use>' +
           '<use href="#sym-bottom-extension" width="589.79" height="4690.21"></use>' +
           "</g>" +
           '<g class="dome-wrap">' +
