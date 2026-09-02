@@ -69,6 +69,15 @@
     transform: translateY(calc((var(--button-height) + var(--cell-height-gain, 0) - var(--click-intensity)) * -1px));
   }
 
+  /* Extension's own Y position relative to the button -- an independent offset layered
+     on top of the shared press transform above (higher specificity so it always wins). */
+  .dome-wrap.ext-wrap {
+    transform: translateY(calc((var(--button-height) + var(--cell-height-gain, 0) + var(--ext-y-offset, 0)) * -1px));
+  }
+  .btn-cell.pressed .dome-wrap.ext-wrap {
+    transform: translateY(calc((var(--button-height) + var(--cell-height-gain, 0) + var(--ext-y-offset, 0) - var(--click-intensity)) * -1px));
+  }
+
   .dome-pressed-use { visibility: hidden; }
   .btn-cell.pressed .dome-up-use { visibility: hidden; }
   .btn-cell.pressed .dome-pressed-use { visibility: visible; }
@@ -347,7 +356,8 @@
     colSpacing: 85,
     rowSpacing: 61,
     altRowXOffset: 45,
-    cumulativeRowOffset: false
+    cumulativeRowOffset: false,
+    extYOffset: 0
   };
 
   var SLIDER_CONFIG = [
@@ -357,6 +367,7 @@
     { key: "rowCount",       label: "Row Count",                   min: 1,     max: 50,   step: 1,    unit: "", integer: true, regen: true },
     { key: "buttonHeight",   label: "Button Height",               min: 0,     max: 200,  step: 1,    unit: "px", cssVar: "--button-height" },
     { key: "clickIntensity", label: "Button Click Intensity",      min: 0,     max: 200,  step: 1,    unit: "px", cssVar: "--click-intensity" },
+    { key: "extYOffset",     label: "Extension Y Offset (vs Button)", min: -300, max: 300, step: 1,    unit: "px", cssVar: "--ext-y-offset" },
     { key: "heightGainPerClick", label: "Height Gain Per Click",   min: 0,     max: 100,  step: 0.5,  unit: "px" },
     { key: "holdThresholdMs", label: "Hold Threshold (Reset)",     min: 100,   max: 2000, step: 50,   unit: "ms" },
     { key: "releaseMs",      label: "Release Speed",               min: 0,     max: 1000, step: 10,   unit: "ms" },
@@ -490,7 +501,7 @@
           "<defs><clipPath id=\"" + clipId + "\" clipPathUnits=\"userSpaceOnUse\">" +
           '<rect class="ext-clip-rect" x="0" y="0" width="589.79" height="0"></rect>' +
           "</clipPath></defs>" +
-          '<g class="dome-wrap" clip-path="url(#' + clipId + ')">' +
+          '<g class="dome-wrap ext-wrap" clip-path="url(#' + clipId + ')">' +
           '<use href="#sym-bottom-extension" width="589.79" height="4690.21"></use>' +
           "</g>" +
           '<use href="#sym-backing" width="589.79" height="605.11"></use>' +
