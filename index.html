@@ -1475,11 +1475,23 @@
   loadSavedDefaults().then(function (loaded) {
     savedDefaults = loaded;
     settings = deepClone(savedDefaults);
-    buildPanelContent();
-    initSortable();
-    initPanelDragResize();
-    applyAllSettings();
+    // Position/size the panel FIRST, before anything below that could throw -- #devPanel's
+    // static CSS has no top/left/width/height of its own (only this call sets them), so if
+    // buildPanelContent/initSortable/initPanelDragResize/applyAllSettings ever threw before
+    // this ran, the panel would stay display:flex but with no real position/size, reading
+    // as "the dev panel doesn't show" even though the gating logic itself was fine.
     applyPanelGeometry();
+    try {
+      buildPanelContent();
+      initSortable();
+      initPanelDragResize();
+      applyAllSettings();
+    } catch (e) {
+      // The panel itself (title bar, Copy/Save/Reset, tabs) is still visible and
+      // positioned even if its group content failed to build -- surface the error
+      // instead of failing completely silently.
+      console.error("Dev panel content failed to build:", e);
+    }
   });
 })();
 </script>
