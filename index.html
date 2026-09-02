@@ -82,6 +82,19 @@
   .btn-cell.pressed .dome-up-use { visibility: hidden; }
   .btn-cell.pressed .dome-pressed-use { visibility: visible; }
 
+  /* Debug boundary overlays -- red outlines of the extension's full extent and the
+     live mask/clip boundary, painted last (on top of everything) via DOM order. */
+  .debug-ext-boundary, .debug-mask-boundary {
+    fill: none;
+    stroke: #ff2020;
+    stroke-width: 6;
+    vector-effect: non-scaling-stroke;
+    visibility: hidden;
+    pointer-events: none;
+  }
+  body.show-ext-boundary .debug-ext-boundary { visibility: visible; }
+  body.show-mask-boundary .debug-mask-boundary { visibility: visible; }
+
   /* ---- Dev panel ---- */
   #devPanel {
     display: none;
@@ -357,7 +370,9 @@
     rowSpacing: 61,
     altRowXOffset: 45,
     cumulativeRowOffset: false,
-    extYOffset: 0
+    extYOffset: 0,
+    debugShowExtBoundary: false,
+    debugShowMaskBoundary: false
   };
 
   var SLIDER_CONFIG = [
@@ -379,7 +394,9 @@
   ];
 
   var CHECKBOX_CONFIG = [
-    { key: "cumulativeRowOffset", label: "Cumulative Row Offset (each row shifts further than the last, instead of alternating)", regen: true }
+    { key: "cumulativeRowOffset", label: "Cumulative Row Offset (each row shifts further than the last, instead of alternating)", regen: true },
+    { key: "debugShowExtBoundary", label: "Show Extension Boundary (red overlay)", bodyClass: "show-ext-boundary" },
+    { key: "debugShowMaskBoundary", label: "Show Mask Boundary (red overlay)", bodyClass: "show-mask-boundary" }
   ];
 
   function isDevAllowed() {
@@ -446,6 +463,9 @@
     var clipSvgUnits = Math.min(EXT_NATURAL_SVG_HEIGHT, gain);
     var rect = cell.querySelector(".ext-clip-rect");
     if (rect) rect.setAttribute("height", clipSvgUnits);
+    // Debug mask-boundary outline tracks the same live height, unclipped, on top of everything.
+    var debugRect = cell.querySelector(".ext-clip-rect-debug");
+    if (debugRect) debugRect.setAttribute("height", clipSvgUnits);
   }
 
   // Every cell starts fully hidden (gain 0 on a fresh grid) -- called once per
@@ -510,6 +530,10 @@
           '<use class="dome-pressed-use" href="#sym-dome-pressed" width="589.79" height="605.11"></use>' +
           "</g>" +
           '<use href="#sym-base" width="589.79" height="605.11"></use>' +
+          '<g class="dome-wrap ext-wrap">' +
+          '<rect class="debug-ext-boundary" x="0" y="0" width="589.79" height="4690.21"></rect>' +
+          '<rect class="debug-mask-boundary ext-clip-rect-debug" x="0" y="0" width="589.79" height="0"></rect>' +
+          "</g>" +
           "</svg>" +
           "</div>"
         );
@@ -633,6 +657,7 @@
       checkbox.type = "checkbox";
       checkbox.id = "checkbox-" + cfg.key;
       checkbox.checked = !!settings[cfg.key];
+      if (cfg.bodyClass) document.body.classList.toggle(cfg.bodyClass, checkbox.checked);
 
       label.appendChild(checkbox);
       label.appendChild(document.createTextNode(" " + cfg.label));
@@ -641,6 +666,7 @@
 
       checkbox.addEventListener("change", function () {
         settings[cfg.key] = checkbox.checked;
+        if (cfg.bodyClass) document.body.classList.toggle(cfg.bodyClass, checkbox.checked);
         if (cfg.regen) regenerateGrid();
       });
     });
