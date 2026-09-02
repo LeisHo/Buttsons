@@ -70,12 +70,14 @@
   }
 
   /* Extension's own Y position relative to the button -- an independent offset layered
-     on top of the shared press transform above (higher specificity so it always wins). */
+     on top of the shared press transform above (higher specificity so it always wins).
+     Subtracted (not added) so positive --ext-y-offset moves it DOWN, matching the same
+     positive-is-down convention every other X/Y position slider uses (CLAUDE.md 12k). */
   .dome-wrap.ext-wrap {
-    transform: translateY(calc((var(--button-height) + var(--cell-height-gain, 0) + var(--ext-y-offset, 0)) * -1px));
+    transform: translateY(calc((var(--button-height) + var(--cell-height-gain, 0) - var(--ext-y-offset, 0)) * -1px));
   }
   .btn-cell.pressed .dome-wrap.ext-wrap {
-    transform: translateY(calc((var(--button-height) + var(--cell-height-gain, 0) + var(--ext-y-offset, 0) - var(--click-intensity)) * -1px));
+    transform: translateY(calc((var(--button-height) + var(--cell-height-gain, 0) - var(--ext-y-offset, 0) - var(--click-intensity)) * -1px));
   }
 
   .dome-pressed-use { visibility: hidden; }
@@ -542,7 +544,7 @@
     rowSpacing: 61,
     altRowXOffset: 45,
     cumulativeRowOffset: false,
-    extYOffset: 134,
+    extYOffset: -134,
     extMaskYOffset: 0,
     debugShowExtBoundary: false,
     debugShowMaskBoundary: false,
@@ -692,7 +694,7 @@
   // from the dome's current position down to exactly the base's own bottom edge, no
   // matter how far the button has risen. The clip window always starts at local y=0
   // and its height is EXT_DOME_COVER plus however far .dome-wrap.ext-wrap's own live
-  // transform has raised the group (button-height + gain + ext-y-offset) -- since that
+  // transform has raised the group (button-height + gain - ext-y-offset) -- since that
   // height is measured in the SAME pre-transform local frame the translate then shifts,
   // the two cancel out and the clip's bottom edge lands pinned at screen-space
   // EXT_DOME_COVER (the base's bottom) for any rise amount, so there's never a gap
@@ -701,7 +703,7 @@
   // artwork's own shape not lining up exactly with the shared viewBox constant.
   function applyClipHeight(cell) {
     var gain = parseFloat(cell.style.getPropertyValue("--cell-height-gain")) || 0;
-    var riseAmount = settings.buttonHeight + gain + settings.extYOffset;
+    var riseAmount = settings.buttonHeight + gain - settings.extYOffset;
     var clipSvgUnits = Math.max(0, Math.min(EXT_NATURAL_SVG_HEIGHT, EXT_DOME_COVER + riseAmount + settings.extMaskYOffset));
     var rect = cell.querySelector(".ext-clip-rect");
     if (rect) rect.setAttribute("height", clipSvgUnits);
