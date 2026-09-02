@@ -722,6 +722,38 @@
     for (var i = 0; i < cells.length; i++) applyClipHeight(cells[i]);
   }
 
+  // Extension Mask's bottom edge is stretched, per cell, so its rendered bottom always
+  // reaches at least the browser's own bottom edge -- regardless of array scale/offset
+  // or which row this cell is in. The mask itself never moves (no transform), so its
+  // own local-to-screen mapping is a fixed linear relationship per cell; sample it at
+  // two points via getScreenCTM (the same technique used throughout this project's own
+  // debugging) rather than deriving it analytically, since it must stay correct across
+  // array-scale, per-row Y position, and window size without re-deriving the formula
+  // each time one of those changes.
+  function updateMaskReach(cell) {
+    var poly = cell.querySelector(".ext-mask-poly");
+    if (!poly) return;
+    var svg = poly.ownerSVGElement;
+    var ctm = poly.getScreenCTM();
+    if (!ctm) return;
+    var p0 = svg.createSVGPoint(); p0.x = 0; p0.y = 0;
+    var p1 = svg.createSVGPoint(); p1.x = 0; p1.y = 1000;
+    var s0 = p0.matrixTransform(ctm), s1 = p1.matrixTransform(ctm);
+    var pxPerUnit = (s1.y - s0.y) / 1000;
+    if (!pxPerUnit) return;
+    // Local Y whose screen position lands exactly at the viewport's bottom edge, plus a
+    // generous margin so it's safely past it, never just barely short.
+    var neededLocalY = (window.innerHeight - s0.y) / pxPerUnit + 2000;
+    var bottomY = Math.max(3435.06, neededLocalY);
+    poly.setAttribute("points",
+      "60.21 439.34 300.26 448.34 544.34 439.34 544.34 " + bottomY + " 60.21 " + bottomY + " 60.21 439.34");
+  }
+
+  function updateAllMaskReach() {
+    var cells = stage.querySelectorAll(".btn-cell");
+    for (var i = 0; i < cells.length; i++) updateMaskReach(cells[i]);
+  }
+
   // Cheap single-cell recompute, used right after a press/release changes just this
   // cell's own accumulated gain -- avoids re-sweeping every cell on every click.
   function updateOneCellExtensionClip(cell) {
@@ -771,17 +803,6 @@
           // Backing sits in the same static position as Base (no transform, matches
           // Base's own footprint exactly) but painted first -- underneath the
           // extension layers -- per explicit request.
-          //
-          // A shape-following static mask (union of Base's own real clip path with the
-          // always-visible dome-to-base gap, applied outside this transformed group) was
-          // attempted twice and reverted both times: it correctly excludes known leak
-          // points, but also suppresses the extension almost everywhere else, including
-          // areas well above Base that should always be visible. An isolated minimal
-          // reproduction of the same nested-clip-path technique (simple rects only)
-          // rendered correctly, so the bug is specific to unioning a rect with Base's
-          // real multi-curve path inside a clipPath -- not reproducible or fixable
-          // within reasonable time in this environment. See ETA History for the
-          // measured attempts. Left as the straight-line Y-pin below.
           '<use href="#sym-backing" width="589.79" height="605.11"></use>' +
           '<g class="dome-wrap ext-wrap" clip-path="url(#' + clipId + ')">' +
           '<use href="#sym-bottom-extension-back" width="589.79" height="4690.21"></use>' +
@@ -791,6 +812,14 @@
           '<use class="dome-up-use" href="#sym-dome-pressed" width="589.79" height="605.11"></use>' +
           '<use class="dome-pressed-use" href="#sym-dome-up" width="589.79" height="605.11"></use>' +
           "</g>" +
+          // Extension Mask: a real asset (not a clip-path) -- a background-colored shape,
+          // static (no transform, anchored by its own authored top edge, same as Backing),
+          // painted over the extension but under Base. Its bottom edge is stretched by JS
+          // (updateExtensionMaskReach) to always reach past the browser's own bottom edge,
+          // so it opaquely erases any extension material below its top regardless of
+          // Base's own ring-shaped gaps -- replaces the clip-path approach that failed
+          // repeatedly (see ETA History for that history).
+          '<polygon class="ext-mask-poly" fill="#14151a" points="60.21 439.34 300.26 448.34 544.34 439.34 544.34 3435.06 60.21 3435.06 60.21 439.34"></polygon>' +
           '<use href="#sym-base" width="589.79" height="605.11"></use>' +
           '<rect class="debug-ext-boundary" x="0" y="0" width="589.79" height="4690.21"></rect>' +
           "</svg>" +
@@ -802,6 +831,7 @@
 
     applyArrayTransform();
     updateExtensionClips();
+    updateAllMaskReach();
   }
 
   function applySetting(cfg, rawValue, opts) {
@@ -1359,7 +1389,12 @@
   MOBILE_MEDIA_QUERY.addEventListener("change", function () {
     applyArrayTransform();
     applyPanelGeometry();
+    updateAllMaskReach();
   });
+
+  // Extension Mask's reach depends on window.innerHeight directly, which can change
+  // without crossing the mobile/desktop breakpoint above (a plain window resize).
+  window.addEventListener("resize", updateAllMaskReach);
 
   // ---- Init ---- (dev-enabled class already applied at the very top of this script)
   devPanel.classList.add(isMobileActive() ? "tab-mobile" : "tab-desktop");
