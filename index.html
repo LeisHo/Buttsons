@@ -96,45 +96,178 @@
   body.show-mask-boundary .debug-mask-boundary { visibility: visible; }
 
   /* ---- Dev panel ---- */
+  :root {
+    --dev-title-font-size: 13;
+    --dev-tab-font-size: 11.5;
+    --dev-group-title-font-size: 12;
+    --dev-setting-title-font-size: 12;
+    --dev-body-font-size: 12;
+    --dev-panel-opacity: 0.92;
+    --dev-bg-color: #0f1014;
+    --dev-title-color: #9fd3ff;
+    --dev-text-color: #e6e6e6;
+  }
   #devPanel {
     display: none;
     position: fixed;
-    top: 12px;
-    right: 12px;
-    width: 300px;
-    max-height: 96vh;
-    overflow-y: auto;
-    touch-action: pan-y;
-    background: rgba(15, 16, 20, 0.92);
+    flex-direction: column;
+    min-width: 220px;
+    min-height: 120px;
+    background: var(--dev-bg-color);
+    opacity: var(--dev-panel-opacity);
     border: 1px solid #3a3d46;
     border-radius: 8px;
-    padding: 12px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 12px;
-    color: #e6e6e6;
+    font-size: calc(var(--dev-body-font-size) * 1px);
+    color: var(--dev-text-color);
     z-index: 1000;
   }
-  body.dev-enabled #devPanel { display: block; }
+  body.dev-enabled #devPanel { display: flex; }
+  body.dev-hidden #devPanel { display: none !important; }
 
-  #devPanel h1 {
-    font-size: 13px;
+  #devPanel.collapsed { height: auto !important; min-height: 0; }
+  #devPanel.collapsed .dev-content,
+  #devPanel.collapsed .resize-handle { display: none; }
+
+  .dev-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    cursor: move;
+    user-select: none;
+    touch-action: none;
+    border-bottom: 1px solid #3a3d46;
+    flex: none;
+  }
+  .dev-titlebar h1 {
+    font-size: calc(var(--dev-title-font-size) * 1px);
     font-weight: 700;
-    margin-bottom: 10px;
     letter-spacing: 0.02em;
-    color: #9fd3ff;
+    color: var(--dev-title-color);
+  }
+  .dev-collapse-btn {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    line-height: 18px;
+    text-align: center;
+    padding: 0;
+    background: #262932;
+    color: #e6e6e6;
+    border: 1px solid #4a4e5a;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
   }
 
-  .dev-row { margin-bottom: 10px; }
+  .dev-content {
+    overflow-y: auto;
+    touch-action: pan-y;
+    padding: 10px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* Desktop/Mobile tabs -- most settings are shared between them (edited once, same
+     row either way); a setting tagged device-specific renders only under its own tab. */
+  .dev-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+    flex: none;
+  }
+  .dev-tab-btn {
+    flex: 1;
+    background: #1c1e24;
+    color: #9099a4;
+    border: 1px solid #3a3d46;
+    border-radius: 5px;
+    padding: 5px 8px;
+    font-size: calc(var(--dev-tab-font-size) * 1px);
+    cursor: pointer;
+  }
+  #devPanel.tab-desktop .dev-tab-btn[data-tab="desktop"],
+  #devPanel.tab-mobile .dev-tab-btn[data-tab="mobile"] {
+    background: #2a3f5a;
+    color: #cfe6ff;
+    border-color: #5aa9ff;
+  }
+  .dev-tab-desktop, .dev-tab-mobile { display: none !important; }
+  #devPanel.tab-desktop .dev-tab-desktop,
+  #devPanel.tab-mobile .dev-tab-mobile { display: flex !important; }
+
+  /* Resize hit-zones on all 4 edges + all 4 corners. Edge strips are inset from the
+     corners so corner-dragging (diagonal resize) always wins over an edge drag near it. */
+  .resize-handle { position: absolute; z-index: 5; }
+  .resize-handle.n { top: -3px; left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
+  .resize-handle.s { bottom: -3px; left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
+  .resize-handle.e { top: 10px; right: -3px; bottom: 10px; width: 6px; cursor: ew-resize; }
+  .resize-handle.w { top: 10px; left: -3px; bottom: 10px; width: 6px; cursor: ew-resize; }
+  .resize-handle.ne { top: -3px; right: -3px; width: 13px; height: 13px; cursor: nesw-resize; }
+  .resize-handle.nw { top: -3px; left: -3px; width: 13px; height: 13px; cursor: nwse-resize; }
+  .resize-handle.se { bottom: -3px; right: -3px; width: 13px; height: 13px; cursor: nwse-resize; }
+  .resize-handle.sw { bottom: -3px; left: -3px; width: 13px; height: 13px; cursor: nesw-resize; }
+
+  .dev-group {
+    margin-bottom: 10px;
+    border: 1px solid #2c2f38;
+    border-radius: 6px;
+  }
+  .dev-group-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    background: #1c1e24;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .dev-group-title {
+    flex: 1;
+    font-weight: 600;
+    color: #c7cad1;
+    font-size: calc(var(--dev-group-title-font-size) * 1px);
+  }
+  .dev-group-caret {
+    color: #888;
+    font-size: 10px;
+    transition: transform 0.15s;
+  }
+  .dev-group.collapsed .dev-group-caret { transform: rotate(-90deg); }
+  .dev-group-body { padding: 8px; }
+  .dev-group.collapsed .dev-group-body { display: none; }
+
+  .drag-grip {
+    flex: none;
+    cursor: grab;
+    color: #666;
+    padding: 0 2px;
+    touch-action: none;
+    font-size: 12px;
+    line-height: 1;
+  }
+  .drag-grip:active { cursor: grabbing; }
+  .drag-over-before { box-shadow: inset 0 2px 0 0 #5aa9ff; }
+  .drag-over-after { box-shadow: inset 0 -2px 0 0 #5aa9ff; }
+  .dragging-item { opacity: 0.4; }
+
+  .dev-row { margin-bottom: 10px; display: flex; align-items: flex-start; gap: 4px; }
+  .dev-row-main { flex: 1; min-width: 0; }
   .dev-row label {
     display: block;
     margin-bottom: 3px;
     color: #b7bac2;
+    font-size: calc(var(--dev-setting-title-font-size) * 1px);
   }
   .dev-checkbox-label {
     display: flex !important;
     align-items: center;
     gap: 6px;
     cursor: pointer;
+    font-size: calc(var(--dev-setting-title-font-size) * 1px);
   }
   .dev-checkbox-label input[type="checkbox"] {
     flex: none;
@@ -170,10 +303,20 @@
     text-align: right;
   }
 
+  .dev-row-main input[type="color"] {
+    width: 100%;
+    height: 24px;
+    padding: 0;
+    border: 1px solid #4a4e5a;
+    border-radius: 4px;
+    background: none;
+    cursor: pointer;
+  }
+
   .dev-actions {
     display: flex;
     gap: 6px;
-    margin-top: 12px;
+    margin-top: 4px;
     flex-wrap: wrap;
   }
   .dev-actions button {
@@ -188,12 +331,6 @@
     cursor: pointer;
   }
   .dev-actions button:hover { background: #33374300; background: #33374a; }
-  .dev-hint {
-    margin-top: 8px;
-    font-size: 10.5px;
-    color: #7a7d85;
-    line-height: 1.4;
-  }
 </style>
 </head>
 <body>
@@ -338,14 +475,30 @@
 </div>
 
 <div id="devPanel">
-  <h1>DEV</h1>
-  <div id="devSliders"></div>
-  <div class="dev-actions">
-    <button id="btnCopy">Copy Settings</button>
-    <button id="btnSave">Save Settings</button>
-    <button id="btnReset">Reset</button>
+  <div class="resize-handle n" data-dir="n"></div>
+  <div class="resize-handle s" data-dir="s"></div>
+  <div class="resize-handle e" data-dir="e"></div>
+  <div class="resize-handle w" data-dir="w"></div>
+  <div class="resize-handle ne" data-dir="ne"></div>
+  <div class="resize-handle nw" data-dir="nw"></div>
+  <div class="resize-handle se" data-dir="se"></div>
+  <div class="resize-handle sw" data-dir="sw"></div>
+  <div class="dev-titlebar" id="devTitlebar">
+    <h1>DEV</h1>
+    <button class="dev-collapse-btn" id="devCollapseBtn" title="Collapse">&#9650;</button>
   </div>
-  <div class="dev-hint">Click a value to type a precise number, even beyond the slider's own range.</div>
+  <div class="dev-content">
+    <div class="dev-tabs">
+      <button class="dev-tab-btn" data-tab="desktop">Desktop</button>
+      <button class="dev-tab-btn" data-tab="mobile">Mobile</button>
+    </div>
+    <div id="devGroups"></div>
+    <div class="dev-actions">
+      <button id="btnCopy">Copy Settings</button>
+      <button id="btnSave">Save Settings</button>
+      <button id="btnReset">Reset</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -372,12 +525,51 @@
     cumulativeRowOffset: false,
     extYOffset: 0,
     debugShowExtBoundary: false,
-    debugShowMaskBoundary: false
+    debugShowMaskBoundary: false,
+
+    // Built-in "Dev Panel" meta-styling group (CLAUDE.md 12i) -- the panel's own
+    // text sizing/opacity/colors, shared between tabs (one physical panel, one look).
+    devTitleFontSize: 13,
+    devTabFontSize: 11.5,
+    devGroupTitleFontSize: 12,
+    devSettingTitleFontSize: 12,
+    devBodyFontSize: 12,
+    devPanelOpacity: 0.92,
+    devBgColor: "#0f1014",
+    devTitleColor: "#9fd3ff",
+    devTextColor: "#e6e6e6",
+
+    // Group/setting order and per-device panel geometry -- persisted alongside the
+    // regular values so Copy/Save/Reset carry the whole layout, not just the numbers
+    // (CLAUDE.md Section 12e/12f). Geometry is null until the panel is actually
+    // dragged/resized once; a null geometry falls back to a computed default.
+    _groupOrder: ["devpanel", "grid", "spacing", "press", "debug"],
+    _itemOrderByGroup: {
+      devpanel: ["devTitleFontSize", "devTabFontSize", "devGroupTitleFontSize", "devSettingTitleFontSize", "devBodyFontSize", "devPanelOpacity", "devBgColor", "devTitleColor", "devTextColor"],
+      grid: ["arrayScale", "mobileArrayScale", "colCount", "rowCount"],
+      spacing: ["xOffset", "yOffset", "colSpacing", "rowSpacing", "altRowXOffset", "cumulativeRowOffset"],
+      press: ["buttonHeight", "clickIntensity", "extYOffset", "heightGainPerClick", "holdThresholdMs", "releaseMs"],
+      debug: ["debugShowExtBoundary", "debugShowMaskBoundary"]
+    },
+    _panelGeometryDesktop: null,
+    _panelGeometryMobile: null
   };
 
+  var GROUP_DEFS = [
+    { id: "devpanel", title: "Dev Panel" },
+    { id: "grid", title: "Array Grid" },
+    { id: "spacing", title: "Array Spacing" },
+    { id: "press", title: "Button Press" },
+    { id: "debug", title: "Debug" }
+  ];
+
+  function deepClone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+  }
+
   var SLIDER_CONFIG = [
-    { key: "arrayScale",       label: "Scale of Array (Desktop)",  min: 0.1,   max: 3,    step: 0.01, unit: "" },
-    { key: "mobileArrayScale", label: "Scale of Array (Mobile)",   min: 0.1,   max: 3,    step: 0.01, unit: "" },
+    { key: "arrayScale",       label: "Scale of Array",  min: 0.1, max: 3, step: 0.01, unit: "", deviceTab: "desktop" },
+    { key: "mobileArrayScale", label: "Scale of Array",  min: 0.1, max: 3, step: 0.01, unit: "", deviceTab: "mobile" },
     { key: "colCount",       label: "Column Count",                min: 1,     max: 50,   step: 1,    unit: "", integer: true, regen: true },
     { key: "rowCount",       label: "Row Count",                   min: 1,     max: 50,   step: 1,    unit: "", integer: true, regen: true },
     { key: "buttonHeight",   label: "Button Height",               min: 0,     max: 200,  step: 1,    unit: "px", cssVar: "--button-height" },
@@ -390,7 +582,14 @@
     { key: "yOffset",        label: "Y Offset of Whole Array",     min: -1500, max: 1500, step: 1,    unit: "px", cssVar: "--array-y-offset" },
     { key: "colSpacing",     label: "X Spacing (per button/row)",  min: 10,    max: 400,  step: 1,    unit: "px", regen: true },
     { key: "rowSpacing",     label: "Y Spacing (per row)",         min: 10,    max: 400,  step: 1,    unit: "px", regen: true },
-    { key: "altRowXOffset",  label: "X Offset (Row Stagger)",      min: -300,  max: 300,  step: 1,    unit: "px", regen: true }
+    { key: "altRowXOffset",  label: "X Offset (Row Stagger)",      min: -300,  max: 300,  step: 1,    unit: "px", regen: true },
+
+    { key: "devTitleFontSize",       label: "Dev Panel Title Font Size",          min: 8, max: 24, step: 0.5, unit: "px", cssVar: "--dev-title-font-size" },
+    { key: "devTabFontSize",         label: "Desktop/Mobile Tab Font Size",       min: 8, max: 24, step: 0.5, unit: "px", cssVar: "--dev-tab-font-size" },
+    { key: "devGroupTitleFontSize",  label: "Collapsible Group Title Font Size",  min: 8, max: 24, step: 0.5, unit: "px", cssVar: "--dev-group-title-font-size" },
+    { key: "devSettingTitleFontSize", label: "Settings Title Font Size",          min: 8, max: 24, step: 0.5, unit: "px", cssVar: "--dev-setting-title-font-size" },
+    { key: "devBodyFontSize",        label: "Body Text Font Size",                min: 8, max: 24, step: 0.5, unit: "px", cssVar: "--dev-body-font-size" },
+    { key: "devPanelOpacity",        label: "Dev Panel Opacity",                  min: 0.1, max: 1, step: 0.01, unit: "", cssVar: "--dev-panel-opacity" }
   ];
 
   var CHECKBOX_CONFIG = [
@@ -398,6 +597,17 @@
     { key: "debugShowExtBoundary", label: "Show Extension Boundary (red overlay)", bodyClass: "show-ext-boundary" },
     { key: "debugShowMaskBoundary", label: "Show Mask Boundary (red overlay)", bodyClass: "show-mask-boundary" }
   ];
+
+  var COLOR_CONFIG = [
+    { key: "devBgColor",    label: "Dev Panel Background Color",  cssVar: "--dev-bg-color" },
+    { key: "devTitleColor", label: "Dev Panel Title Text Color",  cssVar: "--dev-title-color" },
+    { key: "devTextColor",  label: "Dev Panel Non-Title Text Color", cssVar: "--dev-text-color" }
+  ];
+
+  var CONTROL_BY_KEY = {};
+  SLIDER_CONFIG.forEach(function (cfg) { cfg.type = "slider"; CONTROL_BY_KEY[cfg.key] = cfg; });
+  CHECKBOX_CONFIG.forEach(function (cfg) { cfg.type = "checkbox"; CONTROL_BY_KEY[cfg.key] = cfg; });
+  COLOR_CONFIG.forEach(function (cfg) { cfg.type = "color"; CONTROL_BY_KEY[cfg.key] = cfg; });
 
   function isDevAllowed() {
     var h = location.hostname;
@@ -412,21 +622,21 @@
   function loadSavedDefaults() {
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return Object.assign({}, DEFAULT_SETTINGS);
+      if (!raw) return deepClone(DEFAULT_SETTINGS);
       var parsed = JSON.parse(raw);
-      var merged = Object.assign({}, DEFAULT_SETTINGS, parsed);
-      return merged;
+      return Object.assign(deepClone(DEFAULT_SETTINGS), parsed);
     } catch (e) {
-      return Object.assign({}, DEFAULT_SETTINGS);
+      return deepClone(DEFAULT_SETTINGS);
     }
   }
 
   var savedDefaults = loadSavedDefaults();
-  var settings = Object.assign({}, savedDefaults);
+  var settings = deepClone(savedDefaults);
 
   var root = document.documentElement;
   var stage = document.getElementById("arrayStage");
-  var slidersHost = document.getElementById("devSliders");
+  var groupsHost = document.getElementById("devGroups");
+  var devPanel = document.getElementById("devPanel");
 
   var ARRAY_SCALE_CSS = "--array-scale";
   var MOBILE_MEDIA_QUERY = matchMedia("(max-width: 767px)");
@@ -620,47 +830,18 @@
     });
   }
 
-  function buildSliders() {
-    slidersHost.innerHTML = "";
-    SLIDER_CONFIG.forEach(function (cfg) {
-      var row = document.createElement("div");
-      row.className = "dev-row";
+  function renderControl(cfg) {
+    var row = document.createElement("div");
+    row.dataset.key = cfg.key;
+    var tabClass = cfg.deviceTab ? " dev-tab-" + cfg.deviceTab : "";
 
-      var label = document.createElement("label");
-      label.textContent = cfg.label;
-      row.appendChild(label);
+    var grip = document.createElement("span");
+    grip.className = "drag-grip";
+    grip.textContent = "≡";
 
-      var controls = document.createElement("div");
-      controls.className = "dev-row-controls";
-
-      var slider = document.createElement("input");
-      slider.type = "range";
-      slider.id = "slider-" + cfg.key;
-      slider.min = cfg.min;
-      slider.max = cfg.max;
-      slider.step = cfg.step;
-      slider.value = settings[cfg.key];
-      controls.appendChild(slider);
-
-      var valueEl = document.createElement("span");
-      valueEl.className = "dev-value";
-      valueEl.id = "value-" + cfg.key;
-      valueEl.textContent = formatValue(cfg, settings[cfg.key]);
-      controls.appendChild(valueEl);
-
-      row.appendChild(controls);
-      slidersHost.appendChild(row);
-
-      slider.addEventListener("input", function () {
-        applySetting(cfg, parseFloat(slider.value));
-      });
-
-      makeValueEditable(cfg, valueEl);
-    });
-
-    CHECKBOX_CONFIG.forEach(function (cfg) {
-      var row = document.createElement("div");
-      row.className = "dev-row dev-row-checkbox";
+    if (cfg.type === "checkbox") {
+      row.className = "dev-row dev-row-checkbox" + tabClass;
+      row.appendChild(grip);
 
       var label = document.createElement("label");
       label.className = "dev-checkbox-label";
@@ -675,19 +856,178 @@
       label.appendChild(checkbox);
       label.appendChild(document.createTextNode(" " + cfg.label));
       row.appendChild(label);
-      slidersHost.appendChild(row);
 
       checkbox.addEventListener("change", function () {
         settings[cfg.key] = checkbox.checked;
         if (cfg.bodyClass) document.body.classList.toggle(cfg.bodyClass, checkbox.checked);
         if (cfg.regen) regenerateGrid();
       });
+      return row;
+    }
+
+    if (cfg.type === "color") {
+      row.className = "dev-row" + tabClass;
+      row.appendChild(grip);
+
+      var colorMain = document.createElement("div");
+      colorMain.className = "dev-row-main";
+      var colorLabel = document.createElement("label");
+      colorLabel.textContent = cfg.label;
+      colorMain.appendChild(colorLabel);
+
+      var colorInput = document.createElement("input");
+      colorInput.type = "color";
+      colorInput.id = "color-" + cfg.key;
+      colorInput.value = settings[cfg.key];
+      colorInput.addEventListener("input", function () {
+        settings[cfg.key] = colorInput.value;
+        applyCssVar(cfg, colorInput.value);
+      });
+      colorMain.appendChild(colorInput);
+      row.appendChild(colorMain);
+      return row;
+    }
+
+    row.className = "dev-row" + tabClass;
+    row.appendChild(grip);
+
+    var main = document.createElement("div");
+    main.className = "dev-row-main";
+
+    var label2 = document.createElement("label");
+    label2.textContent = cfg.label;
+    main.appendChild(label2);
+
+    var controls = document.createElement("div");
+    controls.className = "dev-row-controls";
+
+    var slider = document.createElement("input");
+    slider.type = "range";
+    slider.id = "slider-" + cfg.key;
+    slider.min = cfg.min;
+    slider.max = cfg.max;
+    slider.step = cfg.step;
+    slider.value = settings[cfg.key];
+    controls.appendChild(slider);
+
+    var valueEl = document.createElement("span");
+    valueEl.className = "dev-value";
+    valueEl.id = "value-" + cfg.key;
+    valueEl.textContent = formatValue(cfg, settings[cfg.key]);
+    controls.appendChild(valueEl);
+
+    main.appendChild(controls);
+    row.appendChild(main);
+
+    slider.addEventListener("input", function () {
+      applySetting(cfg, parseFloat(slider.value));
+    });
+    makeValueEditable(cfg, valueEl);
+    return row;
+  }
+
+  function buildPanelContent() {
+    groupsHost.innerHTML = "";
+    settings._groupOrder.forEach(function (groupId) {
+      var def = GROUP_DEFS.filter(function (g) { return g.id === groupId; })[0];
+      if (!def) return;
+
+      var groupEl = document.createElement("div");
+      groupEl.className = "dev-group";
+      groupEl.dataset.groupId = groupId;
+
+      var header = document.createElement("div");
+      header.className = "dev-group-header";
+      var grip = document.createElement("span");
+      grip.className = "drag-grip";
+      grip.textContent = "≡";
+      var title = document.createElement("span");
+      title.className = "dev-group-title";
+      title.textContent = def.title;
+      var caret = document.createElement("span");
+      caret.className = "dev-group-caret";
+      caret.textContent = "▼";
+      header.appendChild(grip);
+      header.appendChild(title);
+      header.appendChild(caret);
+      header.addEventListener("click", function (e) {
+        if (e.target === grip) return;
+        groupEl.classList.toggle("collapsed");
+      });
+      groupEl.appendChild(header);
+
+      var body = document.createElement("div");
+      body.className = "dev-group-body";
+      (settings._itemOrderByGroup[groupId] || []).forEach(function (key) {
+        var cfg = CONTROL_BY_KEY[key];
+        if (cfg) body.appendChild(renderControl(cfg));
+      });
+      groupEl.appendChild(body);
+
+      groupsHost.appendChild(groupEl);
+    });
+  }
+
+  // Single delegated pointer-drag reorder handler for both group order (drag a
+  // group-header grip) and setting order within one group (drag a row grip) --
+  // attached once to the stable groupsHost container rather than per-render, so
+  // rebuilding the panel (e.g. on Reset) never accumulates duplicate listeners.
+  function initSortable() {
+    var dragEl = null, isGroup = false;
+
+    groupsHost.addEventListener("pointerdown", function (e) {
+      var grip = e.target.closest(".drag-grip");
+      if (!grip) return;
+      var groupItem = grip.closest(".dev-group");
+      var rowItem = grip.closest(".dev-row");
+      isGroup = !!grip.closest(".dev-group-header");
+      dragEl = isGroup ? groupItem : rowItem;
+      if (!dragEl) return;
+
+      dragEl.classList.add("dragging-item");
+      try { grip.setPointerCapture(e.pointerId); } catch (err) {}
+
+      function onMove(ev) {
+        if (!dragEl) return;
+        var el = document.elementFromPoint(ev.clientX, ev.clientY);
+        var selector = isGroup ? ".dev-group" : ".dev-row";
+        var target = el && el.closest(selector);
+        if (!target || target === dragEl || target.parentElement !== dragEl.parentElement) return;
+        var rect = target.getBoundingClientRect();
+        var before = (ev.clientY - rect.top) < rect.height / 2;
+        target.parentElement.insertBefore(dragEl, before ? target : target.nextSibling);
+      }
+
+      function onUp() {
+        grip.removeEventListener("pointermove", onMove);
+        grip.removeEventListener("pointerup", onUp);
+        grip.removeEventListener("pointercancel", onUp);
+        if (!dragEl) return;
+        dragEl.classList.remove("dragging-item");
+        if (isGroup) {
+          settings._groupOrder = Array.from(groupsHost.children).map(function (el) { return el.dataset.groupId; });
+        } else {
+          var body = dragEl.parentElement;
+          var groupId = body.closest(".dev-group").dataset.groupId;
+          settings._itemOrderByGroup[groupId] = Array.from(body.children).map(function (el) { return el.dataset.key; });
+        }
+        dragEl = null;
+      }
+
+      grip.addEventListener("pointermove", onMove);
+      grip.addEventListener("pointerup", onUp);
+      grip.addEventListener("pointercancel", onUp);
     });
   }
 
   function applyAllSettings() {
     SLIDER_CONFIG.forEach(function (cfg) {
       applySetting(cfg, settings[cfg.key], { skipRegen: true });
+    });
+    COLOR_CONFIG.forEach(function (cfg) {
+      applyCssVar(cfg, settings[cfg.key]);
+      var input = document.getElementById("color-" + cfg.key);
+      if (input) input.value = settings[cfg.key];
     });
     regenerateGrid();
   }
@@ -795,8 +1135,9 @@
   document.getElementById("btnSave").addEventListener("click", function () {
     var btn = this;
     try {
+      savePanelGeometry();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-      savedDefaults = Object.assign({}, settings);
+      savedDefaults = deepClone(settings);
       flashButton(btn, "Saved!");
     } catch (e) {
       flashButton(btn, "Save failed");
@@ -804,21 +1145,141 @@
   });
 
   document.getElementById("btnReset").addEventListener("click", function () {
-    settings = Object.assign({}, savedDefaults);
-    buildSliders();
+    settings = deepClone(savedDefaults);
+    buildPanelContent();
     applyAllSettings();
+    applyPanelGeometry();
   });
 
-  // Re-apply the active (mobile vs desktop) scale live when the breakpoint is crossed
-  // (device rotation, browser resize, or a desktop window resized narrower than 767px).
-  MOBILE_MEDIA_QUERY.addEventListener("change", applyArrayTransform);
+  // ---- Dev panel geometry: resize (8 handles), move (titlebar drag), hide (D key),
+  // collapse (button) -- persisted separately per device class (CLAUDE.md 12c/12f). ----
+  function computeDefaultGeometry() {
+    if (isMobileActive()) {
+      return { top: 12, left: 12, width: Math.min(320, window.innerWidth - 24), height: Math.min(420, window.innerHeight - 24) };
+    }
+    return { top: 12, left: Math.max(12, window.innerWidth - 312), width: 300, height: Math.min(600, window.innerHeight - 24) };
+  }
+
+  function activeGeometryKey() {
+    return isMobileActive() ? "_panelGeometryMobile" : "_panelGeometryDesktop";
+  }
+
+  function applyPanelGeometry() {
+    var geo = settings[activeGeometryKey()] || computeDefaultGeometry();
+    devPanel.style.top = geo.top + "px";
+    devPanel.style.left = geo.left + "px";
+    devPanel.style.width = geo.width + "px";
+    devPanel.style.height = geo.height + "px";
+  }
+
+  function savePanelGeometry() {
+    var rect = devPanel.getBoundingClientRect();
+    settings[activeGeometryKey()] = { top: rect.top, left: rect.left, width: rect.width, height: rect.height };
+  }
+
+  function initPanelDragResize() {
+    var titlebar = document.getElementById("devTitlebar");
+    var collapseBtn = document.getElementById("devCollapseBtn");
+
+    titlebar.addEventListener("pointerdown", function (e) {
+      if (e.target.closest(".dev-collapse-btn")) return;
+      var startX = e.clientX, startY = e.clientY;
+      var rect = devPanel.getBoundingClientRect();
+      var startTop = rect.top, startLeft = rect.left;
+      try { titlebar.setPointerCapture(e.pointerId); } catch (err) {}
+
+      function onMove(ev) {
+        var dx = ev.clientX - startX, dy = ev.clientY - startY;
+        var newLeft = Math.max(0, Math.min(window.innerWidth - devPanel.offsetWidth, startLeft + dx));
+        var newTop = Math.max(0, Math.min(window.innerHeight - 30, startTop + dy));
+        devPanel.style.left = newLeft + "px";
+        devPanel.style.top = newTop + "px";
+      }
+      function onUp() {
+        titlebar.removeEventListener("pointermove", onMove);
+        titlebar.removeEventListener("pointerup", onUp);
+        titlebar.removeEventListener("pointercancel", onUp);
+        savePanelGeometry();
+      }
+      titlebar.addEventListener("pointermove", onMove);
+      titlebar.addEventListener("pointerup", onUp);
+      titlebar.addEventListener("pointercancel", onUp);
+    });
+
+    var MIN_W = 220, MIN_H = 120;
+    Array.prototype.forEach.call(devPanel.querySelectorAll(".resize-handle"), function (handle) {
+      handle.addEventListener("pointerdown", function (e) {
+        e.stopPropagation();
+        var dir = handle.dataset.dir;
+        var startX = e.clientX, startY = e.clientY;
+        var rect = devPanel.getBoundingClientRect();
+        var startTop = rect.top, startLeft = rect.left, startW = rect.width, startH = rect.height;
+        try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+
+        function onMove(ev) {
+          var dx = ev.clientX - startX, dy = ev.clientY - startY;
+          var top = startTop, left = startLeft, w = startW, h = startH;
+          if (dir.indexOf("e") !== -1) w = Math.max(MIN_W, startW + dx);
+          if (dir.indexOf("s") !== -1) h = Math.max(MIN_H, startH + dy);
+          if (dir.indexOf("w") !== -1) { w = Math.max(MIN_W, startW - dx); left = startLeft + (startW - w); }
+          if (dir.indexOf("n") !== -1) { h = Math.max(MIN_H, startH - dy); top = startTop + (startH - h); }
+          devPanel.style.top = top + "px";
+          devPanel.style.left = left + "px";
+          devPanel.style.width = w + "px";
+          devPanel.style.height = h + "px";
+        }
+        function onUp() {
+          handle.removeEventListener("pointermove", onMove);
+          handle.removeEventListener("pointerup", onUp);
+          handle.removeEventListener("pointercancel", onUp);
+          savePanelGeometry();
+        }
+        handle.addEventListener("pointermove", onMove);
+        handle.addEventListener("pointerup", onUp);
+        handle.addEventListener("pointercancel", onUp);
+      });
+    });
+
+    collapseBtn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      devPanel.classList.toggle("collapsed");
+      collapseBtn.textContent = devPanel.classList.contains("collapsed") ? "▼" : "▲";
+    });
+
+    Array.prototype.forEach.call(devPanel.querySelectorAll(".dev-tab-btn"), function (btn) {
+      btn.addEventListener("click", function () {
+        devPanel.classList.remove("tab-desktop", "tab-mobile");
+        devPanel.classList.add("tab-" + btn.dataset.tab);
+      });
+    });
+
+    // 'D' hides the whole panel (distinct from collapse); ignored while typing in a field.
+    document.addEventListener("keydown", function (e) {
+      if (e.key.toLowerCase() !== "d") return;
+      var t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (!document.body.classList.contains("dev-enabled")) return;
+      document.body.classList.toggle("dev-hidden");
+    });
+  }
+
+  // Re-apply the active (mobile vs desktop) scale + panel geometry live when the
+  // breakpoint is crossed (device rotation, browser resize, desktop window narrowed).
+  MOBILE_MEDIA_QUERY.addEventListener("change", function () {
+    applyArrayTransform();
+    applyPanelGeometry();
+  });
 
   // ---- Init ----
   if (isDevAllowed()) {
     document.body.classList.add("dev-enabled");
   }
-  buildSliders();
+  devPanel.classList.add(isMobileActive() ? "tab-mobile" : "tab-desktop");
+  buildPanelContent();
+  initSortable();
+  initPanelDragResize();
   applyAllSettings();
+  applyPanelGeometry();
 })();
 </script>
 </body>
