@@ -868,19 +868,31 @@
         var x = basePad + c * colSp + rowXOffset(r);
         var y = r * rowSp;
         var clipId = "extclip-" + r + "-" + c;
+        var frontClipId = "extfrontclip-" + r + "-" + c;
         parts.push(
           '<div class="btn-cell" style="left:' + x + 'px;top:' + y + 'px" data-r="' + r + '" data-c="' + c + '">' +
           '<svg class="cell-svg" viewBox="0 0 589.79 4690.21" preserveAspectRatio="xMinYMin meet">' +
           "<defs><clipPath id=\"" + clipId + "\" clipPathUnits=\"userSpaceOnUse\">" +
           '<rect class="ext-clip-rect" x="0" y="0" width="589.79" height="0"></rect>' +
+          "</clipPath>" +
+          // Front extension's own silhouette, reused as a stencil for the back layer below
+          // -- guarantees back can never be visible anywhere front itself isn't, regardless
+          // of the two symbols' own authored shapes differing (CLAUDE.md-independent user
+          // request: back should have the exact same visibility as "the extension svg").
+          "<clipPath id=\"" + frontClipId + "\" clipPathUnits=\"userSpaceOnUse\">" +
+          '<use href="#sym-bottom-extension" width="589.79" height="4690.21"></use>' +
           "</clipPath></defs>" +
           // Backing sits in the same static position as Base (no transform, matches
           // Base's own footprint exactly) but painted first -- underneath the
           // extension layers -- per explicit request.
           '<use href="#sym-backing" width="589.79" height="605.11"></use>' +
-          // Both extension layers (back + front) share the same clip-path reveal window.
+          // Both extension layers (back + front) share the same clip-path reveal window;
+          // back is additionally stenciled to front's own shape (see frontClipId above)
+          // so it's never visible outside front's own silhouette.
           '<g class="dome-wrap ext-wrap" clip-path="url(#' + clipId + ')">' +
+          '<g clip-path="url(#' + frontClipId + ')">' +
           '<use class="ext-back-use" href="#sym-bottom-extension-back" width="589.79" height="4690.21"></use>' +
+          "</g>" +
           '<use href="#sym-bottom-extension" width="589.79" height="4690.21"></use>' +
           "</g>" +
           '<g class="dome-wrap">' +
