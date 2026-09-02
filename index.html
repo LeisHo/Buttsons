@@ -62,6 +62,19 @@
     overflow: visible;
   }
 
+  /* The rasterized shaft <image> (a real bitmap resource, unlike the vector <use> it
+     replaced) is exactly what triggers mobile browsers' native long-press "save/copy
+     image" menu -- -webkit-touch-callout on .btn-cell above only covers iOS Safari's own
+     callout, not Android Chrome's separate long-press-on-image handling. The image itself
+     never needs to be an interactive/draggable target (press handling is delegated on
+     .btn-cell), so removing it from hit-testing and drag entirely is both correct and the
+     most direct fix -- the browser can't offer a menu for an image it never touched. */
+  .cell-svg image {
+    pointer-events: none;
+    -webkit-user-drag: none;
+    user-drag: none;
+  }
+
   /* will-change: transform was here, applied to every cell's dome-wrap (~2 per cell x160
      cells = ~320 instances). Root-caused via headless-Chrome A/B testing (see ETA History)
      as the actual cause of a scattered, nondeterministic subset of dome <use>/<image>
@@ -1342,6 +1355,15 @@
   }
 
   var viewport = document.getElementById("arrayViewport");
+
+  // Cross-browser backstop for the same long-press-shows-image-menu problem the CSS above
+  // (pointer-events: none on .cell-svg image) already targets -- belt-and-suspenders in
+  // case any browser still offers a context menu for a long-press gesture inside the array
+  // that isn't rooted in a direct image hit. A context menu is never wanted inside the
+  // play area regardless of cause.
+  viewport.addEventListener("contextmenu", function (e) {
+    e.preventDefault();
+  });
 
   viewport.addEventListener("pointerdown", function (e) {
     var cell = e.target.closest(".btn-cell");
