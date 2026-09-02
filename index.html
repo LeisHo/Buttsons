@@ -11,9 +11,10 @@
     overflow: hidden;
     overscroll-behavior: none;
     touch-action: none;
-    background: #14151a;
+    background: var(--app-bg-color);
   }
   :root {
+    --app-bg-color: #14151a;
     --btn-w: 100;
     --btn-aspect: 1.02597;
     --ext-aspect: 7.95234;
@@ -83,6 +84,15 @@
   .dome-pressed-use { visibility: hidden; }
   .btn-cell.pressed .dome-up-use { visibility: hidden; }
   .btn-cell.pressed .dome-pressed-use { visibility: visible; }
+
+  /* Extension Mask's own Y position -- static like Backing (doesn't track press/gain),
+     but independently nudgeable via its own slider. Positive moves it DOWN (CLAUDE.md
+     12k). updateMaskReach() re-derives the stretched bottom edge from this element's own
+     getScreenCTM(), which already reflects this transform, so no JS math needs updating
+     when this var changes -- only a re-run of updateMaskReach() itself (wired in applySetting). */
+  .ext-mask-poly {
+    transform: translateY(calc(var(--ext-mask-y-pos, 0) * 1px));
+  }
 
   /* Debug boundary overlay -- red outline of the extension symbol's full raw extent,
      static (shares Base/Button's untransformed coordinate frame directly, no offset,
@@ -548,6 +558,7 @@
     cumulativeRowOffset: false,
     extYOffset: -13,
     extMaskYOffset: -58,
+    extMaskYPos: 0,
     debugShowExtBoundary: false,
 
     // Built-in "Dev Panel" meta-styling group (CLAUDE.md 12i) -- the panel's own
@@ -571,7 +582,7 @@
       devpanel: ["devTitleFontSize", "devTabFontSize", "devGroupTitleFontSize", "devSettingTitleFontSize", "devBodyFontSize", "devPanelOpacity", "devBgColor", "devTitleColor", "devTextColor"],
       grid: ["arrayScale", "mobileArrayScale", "colCount", "rowCount"],
       spacing: ["xOffset", "yOffset", "colSpacing", "rowSpacing", "altRowXOffset", "cumulativeRowOffset"],
-      press: ["buttonHeight", "clickIntensity", "extYOffset", "extMaskYOffset", "heightGainPerClick", "holdThresholdMs", "releaseMs"],
+      press: ["buttonHeight", "clickIntensity", "extYOffset", "extMaskYOffset", "extMaskYPos", "heightGainPerClick", "holdThresholdMs", "releaseMs"],
       debug: ["debugShowExtBoundary"]
     },
     _panelGeometryDesktop: null,
@@ -600,6 +611,7 @@
     { key: "clickIntensity", label: "Button Click Intensity",      min: 0,     max: 200,  step: 1,    unit: "px", cssVar: "--click-intensity" },
     { key: "extYOffset",     label: "Extension Y Offset (vs Button)", min: -300, max: 300, step: 1,    unit: "px", cssVar: "--ext-y-offset" },
     { key: "extMaskYOffset", label: "Extension Mask Y Offset",     min: -600,  max: 600,  step: 1,    unit: "px" },
+    { key: "extMaskYPos",    label: "Extension Mask Y Position",   min: -600,  max: 600,  step: 1,    unit: "px", cssVar: "--ext-mask-y-pos" },
     { key: "heightGainPerClick", label: "Height Gain Per Click",   min: 0,     max: 100,  step: 0.5,  unit: "px" },
     { key: "holdThresholdMs", label: "Hold Threshold (Reset)",     min: 100,   max: 2000, step: 50,   unit: "ms" },
     { key: "releaseMs",      label: "Release Speed",               min: 0,     max: 1000, step: 10,   unit: "ms" },
@@ -644,17 +656,59 @@
   }
 
   // The git-tracked settings log (CLAUDE.md 12l) is the only source of saved defaults --
-  // no separate browser-local (localStorage) default alongside it. A GET here just reads
-  // the static JSON file dev_server.py's Save Settings route writes; on a plain static
-  // host, file://, or before the first-ever Save, this 404s/throws and we fall back to
-  // DEFAULT_SETTINGS below rather than silently substituting a local cache.
+  // no separate browser-local (localStorage) default alongside it -- EXCEPT under file://
+  // (12l's explicit exception), where there's no server to write the git log through to
+  // at all, so that mode falls back to the browser's own local cache/storage entirely
+  // instead. A GET here just reads the static JSON file dev_server.py's Save Settings
+  // route writes; on a plain static host or before the first-ever Save, this 404s/throws
+  // and we fall back to DEFAULT_SETTINGS below rather than silently substituting a local
+  // cache -- that silent-substitution behavior is reserved for file:// specifically.
   var SETTINGS_LOG_URL = "/data/processed/dev-panel-settings.json";
+  var LOCAL_FALLBACK_KEY = "buttsonsArraySettings";
+  var isFileProtocol = location.protocol === "file:";
+
+  // A saved dump (from before some setting existed in code) must not silently hide that
+  // setting forever -- Object.assign alone replaces _groupOrder/_itemOrderByGroup wholesale
+  // with whatever the save has, dropping any key/group DEFAULT_SETTINGS knows about but the
+  // save doesn't. Backfill any missing group ids and any missing per-group setting keys
+  // (appended at the end) so a newly-added slider always shows up even under an old save,
+  // while still fully respecting the saved values/order for everything the save DOES have.
+  function mergeWithDefaults(parsed) {
+    var merged = Object.assign(deepClone(DEFAULT_SETTINGS), parsed || {});
+    if (parsed && parsed._groupOrder) {
+      DEFAULT_SETTINGS._groupOrder.forEach(function (id) {
+        if (merged._groupOrder.indexOf(id) === -1) merged._groupOrder.push(id);
+      });
+    }
+    if (parsed && parsed._itemOrderByGroup) {
+      Object.keys(DEFAULT_SETTINGS._itemOrderByGroup).forEach(function (groupId) {
+        var savedList = merged._itemOrderByGroup[groupId];
+        if (!savedList) {
+          merged._itemOrderByGroup[groupId] = DEFAULT_SETTINGS._itemOrderByGroup[groupId].slice();
+          return;
+        }
+        DEFAULT_SETTINGS._itemOrderByGroup[groupId].forEach(function (key) {
+          if (savedList.indexOf(key) === -1) savedList.push(key);
+        });
+      });
+    }
+    return merged;
+  }
 
   function loadSavedDefaults() {
+    if (isFileProtocol) {
+      try {
+        var raw = localStorage.getItem(LOCAL_FALLBACK_KEY);
+        var parsedLocal = raw ? JSON.parse(raw) : null;
+        return Promise.resolve(mergeWithDefaults(parsedLocal));
+      } catch (e) {
+        return Promise.resolve(deepClone(DEFAULT_SETTINGS));
+      }
+    }
     return fetch(SETTINGS_LOG_URL, { cache: "no-store" })
       .then(function (res) { return res.ok ? res.json() : null; })
       .then(function (parsed) {
-        return parsed ? Object.assign(deepClone(DEFAULT_SETTINGS), parsed) : deepClone(DEFAULT_SETTINGS);
+        return mergeWithDefaults(parsed);
       })
       .catch(function () {
         return deepClone(DEFAULT_SETTINGS);
@@ -728,13 +782,14 @@
   }
 
   // Extension Mask's bottom edge is stretched, per cell, so its rendered bottom always
-  // reaches at least the browser's own bottom edge -- regardless of array scale/offset
-  // or which row this cell is in. The mask itself never moves (no transform), so its
-  // own local-to-screen mapping is a fixed linear relationship per cell; sample it at
-  // two points via getScreenCTM (the same technique used throughout this project's own
-  // debugging) rather than deriving it analytically, since it must stay correct across
-  // array-scale, per-row Y position, and window size without re-deriving the formula
-  // each time one of those changes.
+  // reaches at least the browser's own bottom edge -- regardless of array scale/offset,
+  // the user's own --ext-mask-y-pos slider, or which row this cell is in. getScreenCTM()
+  // already folds in the mask's own translateY (CLAUDE.md 12k slider) along with every
+  // ancestor transform, so its local-to-screen mapping is still a fixed linear relation
+  // per cell; sample it at two points (the same technique used throughout this project's
+  // own debugging) rather than deriving it analytically, since it must stay correct
+  // across array-scale, per-row Y position, mask Y position, and window size without
+  // re-deriving the formula each time one of those changes.
   function updateMaskReach(cell) {
     var poly = cell.querySelector(".ext-mask-poly");
     if (!poly) return;
@@ -809,27 +864,24 @@
           // Base's own footprint exactly) but painted first -- underneath the
           // extension layers -- per explicit request.
           '<use href="#sym-backing" width="589.79" height="605.11"></use>' +
-          // Only the FRONT extension goes under the mask -- it's the layer that was
-          // bleeding through Base's gaps. The back layer moved below (still sharing the
-          // same clip-path reveal window) so the mask doesn't also erase it.
+          // Both extension layers (back + front) share the same clip-path reveal window.
           '<g class="dome-wrap ext-wrap" clip-path="url(#' + clipId + ')">' +
+          '<use href="#sym-bottom-extension-back" width="589.79" height="4690.21"></use>' +
           '<use href="#sym-bottom-extension" width="589.79" height="4690.21"></use>' +
           "</g>" +
           '<g class="dome-wrap">' +
           '<use class="dome-up-use" href="#sym-dome-pressed" width="589.79" height="605.11"></use>' +
           '<use class="dome-pressed-use" href="#sym-dome-up" width="589.79" height="605.11"></use>' +
           "</g>" +
-          // Extension Mask: a real asset (not a clip-path) -- a background-colored shape,
-          // static (no transform, anchored by its own authored top edge, same as Backing),
-          // painted over the FRONT extension but under Base. Its bottom edge is stretched
-          // by JS (updateMaskReach) to always reach past the browser's own bottom edge, so
-          // it opaquely erases any front-extension material below its top regardless of
-          // Base's own ring-shaped gaps -- replaces the clip-path approach that failed
-          // repeatedly (see ETA History for that history).
-          '<polygon class="ext-mask-poly" fill="#14151a" points="60.21 439.34 300.26 448.34 544.34 439.34 544.34 3435.06 60.21 3435.06 60.21 439.34"></polygon>' +
-          // Back extension paints on top of the mask (still under Base), sharing the same
-          // clip-path so it reveals in step with the front layer's press animation.
-          '<use href="#sym-bottom-extension-back" width="589.79" height="4690.21" clip-path="url(#' + clipId + ')"></use>' +
+          // Extension Mask: a real asset (not a clip-path) -- a background-colored shape
+          // whose Y position is user-adjustable (--ext-mask-y-pos), anchored otherwise the
+          // same as Backing, painted over BOTH extension layers but under Base. Its bottom
+          // edge is stretched by JS (updateMaskReach) to always reach past the browser's
+          // own bottom edge, so it opaquely erases extension material below its (movable)
+          // top edge regardless of Base's own ring-shaped gaps -- replaces the clip-path
+          // approach that failed repeatedly (see ETA History for that history). Fill tracks
+          // --app-bg-color so it can never visually drift from the real background.
+          '<polygon class="ext-mask-poly" fill="var(--app-bg-color)" points="60.21 439.34 300.26 448.34 544.34 439.34 544.34 3435.06 60.21 3435.06 60.21 439.34"></polygon>' +
           '<use href="#sym-base" width="589.79" height="605.11"></use>' +
           '<rect class="debug-ext-boundary" x="0" y="0" width="589.79" height="4690.21"></rect>' +
           "</svg>" +
@@ -868,6 +920,11 @@
       // bottom edge) -- refresh every clip rect in place rather than a full regen,
       // which would wipe every cell's own accumulated gain.
       updateExtensionClips();
+    }
+    if (cfg.key === "extMaskYPos") {
+      // Moving the mask's own top anchor changes where its bottom edge needs to reach
+      // FROM -- re-derive the stretched bottom point via the mask's own live getScreenCTM().
+      updateAllMaskReach();
     }
     if (cfg.regen && !opts.skipRegen) {
       regenerateGrid();
@@ -1244,11 +1301,22 @@
   document.getElementById("btnSave").addEventListener("click", function () {
     var btn = this;
     savePanelGeometry();
-    // The git-tracked settings log is the only place Save Settings writes to (CLAUDE.md
-    // 12l) -- no separate localStorage default. Only works when served by dev_server.py
-    // (has the /api/save-settings route); under a plain static host or file:// this
-    // genuinely fails, and "Save failed" reflects that honestly rather than pretending
-    // success via a local-only cache.
+    // The git-tracked settings log is the only place Save Settings writes to under a real
+    // server (CLAUDE.md 12l) -- no separate localStorage default there, and "Save failed"
+    // reflects a genuine write failure honestly rather than pretending success via a
+    // local-only cache. file:// is the one explicit exception (12l): there's no server to
+    // receive the write at all, so that mode falls back to the browser's own local
+    // storage entirely instead of attempting the POST.
+    if (isFileProtocol) {
+      try {
+        localStorage.setItem(LOCAL_FALLBACK_KEY, JSON.stringify(settings));
+        savedDefaults = deepClone(settings);
+        flashButton(btn, "Saved (local)!");
+      } catch (e) {
+        flashButton(btn, "Save failed");
+      }
+      return;
+    }
     fetch("/api/save-settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
