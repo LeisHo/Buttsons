@@ -771,6 +771,17 @@
           // Backing sits in the same static position as Base (no transform, matches
           // Base's own footprint exactly) but painted first -- underneath the
           // extension layers -- per explicit request.
+          //
+          // A shape-following static mask (union of Base's own real clip path with the
+          // always-visible dome-to-base gap, applied outside this transformed group) was
+          // attempted twice and reverted both times: it correctly excludes known leak
+          // points, but also suppresses the extension almost everywhere else, including
+          // areas well above Base that should always be visible. An isolated minimal
+          // reproduction of the same nested-clip-path technique (simple rects only)
+          // rendered correctly, so the bug is specific to unioning a rect with Base's
+          // real multi-curve path inside a clipPath -- not reproducible or fixable
+          // within reasonable time in this environment. See ETA History for the
+          // measured attempts. Left as the straight-line Y-pin below.
           '<use href="#sym-backing" width="589.79" height="605.11"></use>' +
           '<g class="dome-wrap ext-wrap" clip-path="url(#' + clipId + ')">' +
           '<use href="#sym-bottom-extension-back" width="589.79" height="4690.21"></use>' +
