@@ -94,18 +94,6 @@
     transform: translateY(calc(var(--ext-mask-y-pos, 0) * 1px));
   }
 
-  /* Extension Back's own scale -- independent of the front layer, anchored at its top
-     edge (matches how Backing/the Mask are anchored) so scaling grows/shrinks it downward
-     rather than from its center. transform-box: fill-box makes the percentage origin
-     resolve against this element's own rendered bounds, not the outer SVG's viewBox
-     (SVG's default transform-box). Still clipped by the shared .ext-wrap clip-path, which
-     clips post-transform content in the parent group's own coordinate space. */
-  .ext-back-use {
-    transform: scale(var(--ext-back-scale, 1));
-    transform-box: fill-box;
-    transform-origin: 50% 0%;
-  }
-
   /* Debug boundary overlay -- red outline of the extension symbol's full raw extent,
      static (shares Base/Button's untransformed coordinate frame directly, no offset,
      doesn't track press/gain) so toggling it or clicking buttons never moves it --
@@ -625,7 +613,7 @@
     { key: "extYOffset",     label: "Extension Y Offset (vs Button)", min: -300, max: 300, step: 1,    unit: "px", cssVar: "--ext-y-offset" },
     { key: "extMaskYOffset", label: "Extension Mask Y Offset",     min: -600,  max: 600,  step: 1,    unit: "px" },
     { key: "extMaskYPos",    label: "Extension Mask Y Position",   min: -600,  max: 600,  step: 1,    unit: "px", cssVar: "--ext-mask-y-pos" },
-    { key: "extBackScale",   label: "Extension Back Scale",        min: 0.1,   max: 3,    step: 0.01, unit: "",   cssVar: "--ext-back-scale" },
+    { key: "extBackScale",   label: "Extension Back Scale",        min: 0.1,   max: 3,    step: 0.01, unit: "" },
     { key: "heightGainPerClick", label: "Height Gain Per Click",   min: 0,     max: 100,  step: 0.5,  unit: "px" },
     { key: "holdThresholdMs", label: "Hold Threshold (Reset)",     min: 100,   max: 2000, step: 50,   unit: "ms" },
     { key: "releaseMs",      label: "Release Speed",               min: 0,     max: 1000, step: 10,   unit: "ms" },
@@ -668,6 +656,14 @@
       return /[?&]dev=1(&|$)/.test(location.search);
     }
   }
+
+  // Anti-abuse shared token for the deployed (Vercel) write-through endpoint (CLAUDE.md
+  // 12l) -- not a real secret, it also lives in this page's own client-side source same
+  // as any other value here (see the sibling Clicko project's api/save-settings.js and
+  // README.md for the established pattern this mirrors). Must match the Vercel project's
+  // own DEV_PANEL_SAVE_SECRET environment variable, which only a human can set (see
+  // README.md) -- Claude Code cannot enter secrets into Vercel's dashboard itself.
+  var DEV_PANEL_SAVE_SECRET = "PkrbMti03M6xm3FEThYXa8gGW_08BOGj";
 
   // The git-tracked settings log (CLAUDE.md 12l) is the only source of saved defaults --
   // no separate browser-local (localStorage) default alongside it -- EXCEPT under file://
@@ -755,6 +751,90 @@
     root.style.setProperty(ARRAY_SCALE_CSS, activeScale);
     stage.style.transform =
       "translate(-50%, -50%) translate(" + settings.xOffset + "px, " + settings.yOffset + "px) scale(" + activeScale + ")";
+  }
+
+  // The two extension-shaft symbols (front/back) are enormous (thousands of path points
+  // each) and get referenced ~160-320+ times across the grid. Reproduced via headless
+  // Chrome with GPU compositing on: this reliably exhausts a real Chromium rendering
+  // resource limit, causing a scattered subset of dome <use> elements to silently fail to
+  // paint (confirmed via elementsFromPoint -- the correct dome is the topmost, opacity:1,
+  // non-occluded hit target at the exact pixel where nothing renders) -- not an app logic
+  // bug. Isolated the actual resource via controlled A/B screenshots: rasterizing each
+  // symbol to its own <image> (eliminating per-cell vector re-rendering entirely) did NOT
+  // help -- pixel-identical to the unfixed version. Separately removing the front-stencil
+  // clip-path (added for a different reason, see below) also made zero difference. The
+  // ONLY thing that measurably helped was cutting an entire overlapping full-size layer
+  // (a throwaway test that deleted the back layer outright). That isolates per-cell LAYER
+  // COUNT itself (not vector complexity, not clip-path count) as the actual resource under
+  // pressure -- so the real fix is compositing front+back into ONE shared bitmap per cell
+  // instead of two, which also makes the front-stencil clip-path (previously needed to keep
+  // back from showing outside front's silhouette) redundant: drawing back UNDER front on
+  // the same canvas naturally erases back wherever front is opaque, matching "back should
+  // have the same visibility as the extension svg" even more directly.
+  function loadImageFromSymbol(symbolId, vbW, vbH) {
+    return new Promise(function (resolve) {
+      try {
+        var symbolEl = document.getElementById(symbolId);
+        if (!symbolEl || !window.Blob || !window.URL || !window.URL.createObjectURL) { resolve(null); return; }
+        var svgMarkup = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + vbW + ' ' + vbH + '" width="' + vbW + '" height="' + vbH + '">' + symbolEl.innerHTML + '</svg>';
+        var svgUrl = URL.createObjectURL(new Blob([svgMarkup], { type: "image/svg+xml;charset=utf-8" }));
+        var img = new Image();
+        img.onload = function () { URL.revokeObjectURL(svgUrl); resolve(img); };
+        img.onerror = function () { URL.revokeObjectURL(svgUrl); resolve(null); };
+        img.src = svgUrl;
+      } catch (e) {
+        resolve(null);
+      }
+    });
+  }
+
+  // Draws backImg (scaled around its own top-center, matching the old --ext-back-scale
+  // CSS transform-origin: 50% 0%) then frontImg on top, onto one shared canvas -- the
+  // single <image> every cell then references. Falls back to null (per-cell <use>, the
+  // original pre-fix behavior) if canvas/Blob APIs are unavailable.
+  function rasterizeCombinedShaft(backImg, frontImg, vbW, vbH, backScale) {
+    return new Promise(function (resolve) {
+      try {
+        if (!backImg && !frontImg) { resolve(null); return; }
+        var canvas = document.createElement("canvas");
+        canvas.width = Math.round(vbW);
+        canvas.height = Math.round(vbH);
+        var ctx = canvas.getContext("2d");
+        if (backImg) {
+          ctx.save();
+          ctx.translate(vbW / 2, 0);
+          ctx.scale(backScale, backScale);
+          ctx.translate(-vbW / 2, 0);
+          ctx.drawImage(backImg, 0, 0, vbW, vbH);
+          ctx.restore();
+        }
+        if (frontImg) ctx.drawImage(frontImg, 0, 0, vbW, vbH);
+        if (!canvas.toBlob) { resolve(null); return; }
+        canvas.toBlob(function (blob) {
+          resolve(blob ? URL.createObjectURL(blob) : null);
+        }, "image/png");
+      } catch (e) {
+        resolve(null);
+      }
+    });
+  }
+
+  var extShaftFrontImg = null;
+  var extShaftBackImg = null;
+  var extShaftRasterUrl = null;
+  var extShaftRasterUrlPrev = null; // revoked lazily so an in-flight <image> reference never breaks
+
+  // Re-composites the shared shaft bitmap from the already-loaded source images (no need
+  // to re-fetch/re-render those) and rebuilds the grid so every cell picks up the result.
+  // Called once at init and again whenever extBackScale changes.
+  function refreshShaftRaster() {
+    return rasterizeCombinedShaft(extShaftBackImg, extShaftFrontImg, 589.79, 4690.21, settings.extBackScale).then(function (url) {
+      if (!url) return;
+      if (extShaftRasterUrlPrev) URL.revokeObjectURL(extShaftRasterUrlPrev);
+      extShaftRasterUrlPrev = extShaftRasterUrl;
+      extShaftRasterUrl = url;
+      regenerateGrid();
+    });
   }
 
   var EXT_NATURAL_SVG_HEIGHT = 4690.21; // the bottom-extension symbol's own natural height, in its own SVG user units
@@ -862,38 +942,31 @@
 
     var cellHeightPx = 100 * 1.02597;
 
+    // Reused verbatim for every cell -- one shared bitmap (back composited under front,
+    // pre-baked once) replaces what used to be two separate per-cell <use> elements plus a
+    // per-cell stencil clip-path. See rasterizeCombinedShaft's comment above.
+    var shaftShapeMarkup = extShaftRasterUrl
+      ? '<image href="' + extShaftRasterUrl + '" width="589.79" height="4690.21" preserveAspectRatio="none"></image>'
+      : '<use href="#sym-bottom-extension" width="589.79" height="4690.21"></use>';
+
     var parts = [];
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
         var x = basePad + c * colSp + rowXOffset(r);
         var y = r * rowSp;
         var clipId = "extclip-" + r + "-" + c;
-        var frontClipId = "extfrontclip-" + r + "-" + c;
         parts.push(
           '<div class="btn-cell" style="left:' + x + 'px;top:' + y + 'px" data-r="' + r + '" data-c="' + c + '">' +
           '<svg class="cell-svg" viewBox="0 0 589.79 4690.21" preserveAspectRatio="xMinYMin meet">' +
           "<defs><clipPath id=\"" + clipId + "\" clipPathUnits=\"userSpaceOnUse\">" +
           '<rect class="ext-clip-rect" x="0" y="0" width="589.79" height="0"></rect>' +
-          "</clipPath>" +
-          // Front extension's own silhouette, reused as a stencil for the back layer below
-          // -- guarantees back can never be visible anywhere front itself isn't, regardless
-          // of the two symbols' own authored shapes differing (CLAUDE.md-independent user
-          // request: back should have the exact same visibility as "the extension svg").
-          "<clipPath id=\"" + frontClipId + "\" clipPathUnits=\"userSpaceOnUse\">" +
-          '<use href="#sym-bottom-extension" width="589.79" height="4690.21"></use>' +
           "</clipPath></defs>" +
           // Backing sits in the same static position as Base (no transform, matches
           // Base's own footprint exactly) but painted first -- underneath the
           // extension layers -- per explicit request.
           '<use href="#sym-backing" width="589.79" height="605.11"></use>' +
-          // Both extension layers (back + front) share the same clip-path reveal window;
-          // back is additionally stenciled to front's own shape (see frontClipId above)
-          // so it's never visible outside front's own silhouette.
           '<g class="dome-wrap ext-wrap" clip-path="url(#' + clipId + ')">' +
-          '<g clip-path="url(#' + frontClipId + ')">' +
-          '<use class="ext-back-use" href="#sym-bottom-extension-back" width="589.79" height="4690.21"></use>' +
-          "</g>" +
-          '<use href="#sym-bottom-extension" width="589.79" height="4690.21"></use>' +
+          shaftShapeMarkup +
           "</g>" +
           '<g class="dome-wrap">' +
           '<use class="dome-up-use" href="#sym-dome-pressed" width="589.79" height="605.11"></use>' +
@@ -951,6 +1024,16 @@
       // Moving the mask's own top anchor changes where its bottom edge needs to reach
       // FROM -- re-derive the stretched bottom point via the mask's own live getScreenCTM().
       updateAllMaskReach();
+    }
+    if (cfg.key === "extBackScale" && !opts.skipRegen) {
+      // The back layer's scale is now baked into the shared shaft bitmap (not a live CSS
+      // transform on a separate per-cell element) -- see rasterizeCombinedShaft's comment.
+      // Re-composite once, then rebuild cells so they all pick up the new shared image.
+      // Guarded by skipRegen the same way cfg.regen is below -- applyAllSettings() (init,
+      // Reset) already composites once itself via refreshShaftRaster() before calling
+      // regenerateGrid() directly, so this would otherwise redundantly re-fire once per
+      // slider processed during that same pass.
+      refreshShaftRaster();
     }
     if (cfg.regen && !opts.skipRegen) {
       regenerateGrid();
@@ -1345,7 +1428,7 @@
     }
     fetch("/api/save-settings", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Dev-Panel-Secret": DEV_PANEL_SAVE_SECRET },
       body: JSON.stringify(settings)
     }).then(function (res) {
       if (!res.ok) throw new Error("save failed");
@@ -1498,7 +1581,14 @@
 
   // ---- Init ---- (dev-enabled class already applied at the very top of this script)
   devPanel.classList.add(isMobileActive() ? "tab-mobile" : "tab-desktop");
-  loadSavedDefaults().then(function (loaded) {
+  Promise.all([
+    loadImageFromSymbol("sym-bottom-extension", 589.79, 4690.21),
+    loadImageFromSymbol("sym-bottom-extension-back", 589.79, 4690.21),
+    loadSavedDefaults()
+  ]).then(function (results) {
+    extShaftFrontImg = results[0];
+    extShaftBackImg = results[1];
+    var loaded = results[2];
     savedDefaults = loaded;
     settings = deepClone(savedDefaults);
     // Position/size the panel FIRST, before anything below that could throw -- #devPanel's
@@ -1507,17 +1597,21 @@
     // this ran, the panel would stay display:flex but with no real position/size, reading
     // as "the dev panel doesn't show" even though the gating logic itself was fine.
     applyPanelGeometry();
-    try {
-      buildPanelContent();
-      initSortable();
-      initPanelDragResize();
-      applyAllSettings();
-    } catch (e) {
-      // The panel itself (title bar, Copy/Save/Reset, tabs) is still visible and
-      // positioned even if its group content failed to build -- surface the error
-      // instead of failing completely silently.
-      console.error("Dev panel content failed to build:", e);
-    }
+    // Composite the shared shaft bitmap before the first regenerateGrid() call (inside
+    // applyAllSettings below) so every cell's very first render already uses it.
+    return refreshShaftRaster().then(function () {
+      try {
+        buildPanelContent();
+        initSortable();
+        initPanelDragResize();
+        applyAllSettings();
+      } catch (e) {
+        // The panel itself (title bar, Copy/Save/Reset, tabs) is still visible and
+        // positioned even if its group content failed to build -- surface the error
+        // instead of failing completely silently.
+        console.error("Dev panel content failed to build:", e);
+      }
+    });
   });
 })();
 </script>
