@@ -338,7 +338,7 @@
 </div>
 
 <div id="devPanel">
-  <h1>BUTTSONS DEV PANEL</h1>
+  <h1>DEV</h1>
   <div id="devSliders"></div>
   <div class="dev-actions">
     <button id="btnCopy">Copy Settings</button>
@@ -590,6 +590,19 @@
         var parsed = parseFloat(input.value);
         input.remove();
         if (!isNaN(parsed)) {
+          // Typing beyond the current range expands whichever bound it crossed to
+          // typed value +/- 20%, so the new value doesn't sit pinned at the slider's
+          // extreme end (project-wide HTML standard, CLAUDE.md Section 12h).
+          var slider = document.getElementById("slider-" + cfg.key);
+          if (slider) {
+            if (parsed > cfg.max) {
+              cfg.max = parsed + Math.abs(parsed) * 0.2;
+              slider.max = cfg.max;
+            } else if (parsed < cfg.min) {
+              cfg.min = parsed - Math.abs(parsed) * 0.2;
+              slider.min = cfg.min;
+            }
+          }
           applySetting(cfg, parsed);
         } else {
           valueEl.textContent = formatValue(cfg, settings[cfg.key]);
