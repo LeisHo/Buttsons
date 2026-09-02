@@ -82,10 +82,11 @@
   .btn-cell.pressed .dome-up-use { visibility: hidden; }
   .btn-cell.pressed .dome-pressed-use { visibility: visible; }
 
-  /* Debug boundary overlays -- red outlines of the extension's full extent (tracks the
-     button's own rise/press transform) and the real mask asset's own static footprint
-     (shares Base/Button's coordinate frame directly, no offset -- see sym-mask),
-     painted last (on top of everything) via DOM order. */
+  /* Debug boundary overlays -- red outlines of the extension symbol's full raw extent
+     and the real mask asset's own footprint, both static (share Base/Button's
+     untransformed coordinate frame directly, no offset, don't track press/gain) so
+     toggling them or clicking buttons never moves them -- painted last (on top of
+     everything) via DOM order. */
   .debug-ext-boundary, .debug-mask-boundary {
     fill: none;
     stroke: #ff2020;
@@ -557,7 +558,8 @@
       debug: ["debugShowExtBoundary", "debugShowMaskBoundary"]
     },
     _panelGeometryDesktop: null,
-    _panelGeometryMobile: null
+    _panelGeometryMobile: null,
+    _collapsedGroups: []
   };
 
   var GROUP_DEFS = [
@@ -664,6 +666,16 @@
   }
 
   var EXT_NATURAL_SVG_HEIGHT = 4690.21; // the bottom-extension symbol's own natural height, in its own SVG user units
+  // The dome and the extension share the identical rise transform (translateY by the
+  // same button-height+gain), so the dome -- painted on top -- permanently covers the
+  // extension's own local y 0..EXT_DOME_COVER no matter what gain is (that span just
+  // rises together with the dome, staying hidden underneath it). EXT_DOME_COVER is the
+  // shared Base/Button/Backing viewBox height, since that's exactly the footprint the
+  // dome+base occupy above the extension's own attachment point. Reveal only counts
+  // upward from there so the very first bit of growth is visible beneath the button,
+  // instead of requiring gain > 605.11 (~9 default clicks) before any pixel clears it.
+  var EXT_DOME_COVER = 605.11;
+  var EXT_REVEALABLE_HEIGHT = EXT_NATURAL_SVG_HEIGHT - EXT_DOME_COVER;
   // CSS transform: translateY(Npx) on an element INSIDE an SVG resolves in that SVG's
   // OWN user units, not literal CSS pixels -- so --cell-height-gain (fed straight into
   // such a translateY) is already directly in SVG user units here.
@@ -675,7 +687,7 @@
   // being about on-screen array position rather than how far the button has grown).
   function applyClipHeight(cell) {
     var gain = parseFloat(cell.style.getPropertyValue("--cell-height-gain")) || 0;
-    var clipSvgUnits = Math.min(EXT_NATURAL_SVG_HEIGHT, gain);
+    var clipSvgUnits = Math.min(EXT_REVEALABLE_HEIGHT, gain);
     var rect = cell.querySelector(".ext-clip-rect");
     if (rect) rect.setAttribute("height", clipSvgUnits);
   }
@@ -731,7 +743,7 @@
           '<div class="btn-cell" style="left:' + x + 'px;top:' + y + 'px" data-r="' + r + '" data-c="' + c + '">' +
           '<svg class="cell-svg" viewBox="0 0 589.79 4690.21" preserveAspectRatio="xMinYMin meet">' +
           "<defs><clipPath id=\"" + clipId + "\" clipPathUnits=\"userSpaceOnUse\">" +
-          '<rect class="ext-clip-rect" x="0" y="0" width="589.79" height="0"></rect>' +
+          '<rect class="ext-clip-rect" x="0" y="' + EXT_DOME_COVER + '" width="589.79" height="0"></rect>' +
           "</clipPath></defs>" +
           '<g class="dome-wrap ext-wrap" clip-path="url(#' + clipId + ')">' +
           '<use href="#sym-bottom-extension" width="589.79" height="4690.21"></use>' +
@@ -742,9 +754,7 @@
           '<use class="dome-pressed-use" href="#sym-dome-pressed" width="589.79" height="605.11"></use>' +
           "</g>" +
           '<use href="#sym-base" width="589.79" height="605.11"></use>' +
-          '<g class="dome-wrap ext-wrap">' +
           '<rect class="debug-ext-boundary" x="0" y="0" width="589.79" height="4690.21"></rect>' +
-          "</g>" +
           '<use class="debug-mask-boundary" href="#sym-mask" width="589.79" height="605.11"></use>' +
           "</svg>" +
           "</div>"
@@ -937,6 +947,7 @@
       var groupEl = document.createElement("div");
       groupEl.className = "dev-group";
       groupEl.dataset.groupId = groupId;
+      if (settings._collapsedGroups.indexOf(groupId) !== -1) groupEl.classList.add("collapsed");
 
       var header = document.createElement("div");
       header.className = "dev-group-header";
@@ -955,6 +966,12 @@
       header.addEventListener("click", function (e) {
         if (e.target === grip) return;
         groupEl.classList.toggle("collapsed");
+        var idx = settings._collapsedGroups.indexOf(groupId);
+        if (groupEl.classList.contains("collapsed")) {
+          if (idx === -1) settings._collapsedGroups.push(groupId);
+        } else if (idx !== -1) {
+          settings._collapsedGroups.splice(idx, 1);
+        }
       });
       groupEl.appendChild(header);
 
