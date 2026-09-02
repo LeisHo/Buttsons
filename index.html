@@ -62,9 +62,16 @@
     overflow: visible;
   }
 
+  /* will-change: transform was here, applied to every cell's dome-wrap (~2 per cell x160
+     cells = ~320 instances). Root-caused via headless-Chrome A/B testing (see ETA History)
+     as the actual cause of a scattered, nondeterministic subset of dome <use>/<image>
+     elements failing to paint at all -- a well-documented Chromium anti-pattern where
+     will-change on far too many elements exhausts a real compositing-layer budget. Removing
+     it (the transform itself stays, still needed for the press animation) reproducibly
+     fixed 100% of cells across repeated headless-Chrome runs with the exact transform kept
+     intact -- isolating will-change specifically, not the transform, as the trigger. */
   .dome-wrap {
     transform: translateY(calc((var(--button-height) + var(--cell-height-gain, 0)) * -1px));
-    will-change: transform;
   }
   .btn-cell.pressed .dome-wrap {
     transform: translateY(calc((var(--button-height) + var(--cell-height-gain, 0) - var(--click-intensity)) * -1px));
