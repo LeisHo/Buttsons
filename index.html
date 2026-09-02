@@ -95,6 +95,15 @@
     visibility: hidden;
     pointer-events: none;
   }
+  /* The extension boundary's own raw extent (4690.21 SVG units) is ~7.8x a button's
+     own height, and adjacent cells' copies overlap both vertically and horizontally at
+     normal spacing -- outline-only strokes on that many large overlapping rects render
+     as an illegible maze. A soft translucent fill (denser red where copies overlap)
+     reads as a highlighted region instead. */
+  .debug-ext-boundary {
+    fill: rgba(255, 32, 32, 0.05);
+    stroke-width: 2;
+  }
   body.show-ext-boundary .debug-ext-boundary { visibility: visible; }
   body.show-mask-boundary .debug-mask-boundary { visibility: visible; }
 
@@ -530,6 +539,7 @@
     altRowXOffset: 45,
     cumulativeRowOffset: false,
     extYOffset: 0,
+    extMaskYOffset: 0,
     debugShowExtBoundary: false,
     debugShowMaskBoundary: false,
 
@@ -554,7 +564,7 @@
       devpanel: ["devTitleFontSize", "devTabFontSize", "devGroupTitleFontSize", "devSettingTitleFontSize", "devBodyFontSize", "devPanelOpacity", "devBgColor", "devTitleColor", "devTextColor"],
       grid: ["arrayScale", "mobileArrayScale", "colCount", "rowCount"],
       spacing: ["xOffset", "yOffset", "colSpacing", "rowSpacing", "altRowXOffset", "cumulativeRowOffset"],
-      press: ["buttonHeight", "clickIntensity", "extYOffset", "heightGainPerClick", "holdThresholdMs", "releaseMs"],
+      press: ["buttonHeight", "clickIntensity", "extYOffset", "extMaskYOffset", "heightGainPerClick", "holdThresholdMs", "releaseMs"],
       debug: ["debugShowExtBoundary", "debugShowMaskBoundary"]
     },
     _panelGeometryDesktop: null,
@@ -582,6 +592,7 @@
     { key: "buttonHeight",   label: "Button Height",               min: 0,     max: 200,  step: 1,    unit: "px", cssVar: "--button-height" },
     { key: "clickIntensity", label: "Button Click Intensity",      min: 0,     max: 200,  step: 1,    unit: "px", cssVar: "--click-intensity" },
     { key: "extYOffset",     label: "Extension Y Offset (vs Button)", min: -300, max: 300, step: 1,    unit: "px", cssVar: "--ext-y-offset" },
+    { key: "extMaskYOffset", label: "Extension Mask Y Offset",     min: -600,  max: 600,  step: 1,    unit: "px" },
     { key: "heightGainPerClick", label: "Height Gain Per Click",   min: 0,     max: 100,  step: 0.5,  unit: "px" },
     { key: "holdThresholdMs", label: "Hold Threshold (Reset)",     min: 100,   max: 2000, step: 50,   unit: "ms" },
     { key: "releaseMs",      label: "Release Speed",               min: 0,     max: 1000, step: 10,   unit: "ms" },
@@ -689,7 +700,13 @@
     var gain = parseFloat(cell.style.getPropertyValue("--cell-height-gain")) || 0;
     var clipSvgUnits = Math.min(EXT_REVEALABLE_HEIGHT, gain);
     var rect = cell.querySelector(".ext-clip-rect");
-    if (rect) rect.setAttribute("height", clipSvgUnits);
+    if (rect) {
+      // extMaskYOffset is a user-tunable fine-adjustment on top of the fixed
+      // EXT_DOME_COVER anchor, letting the boundary be nudged to match the raw
+      // artwork's own shape instead of relying purely on the shared viewBox constant.
+      rect.setAttribute("y", EXT_DOME_COVER + settings.extMaskYOffset);
+      rect.setAttribute("height", clipSvgUnits);
+    }
   }
 
   // Every cell starts fully hidden (gain 0 on a fresh grid) -- called once per
@@ -784,6 +801,11 @@
 
     if (cfg.key === "arrayScale" || cfg.key === "mobileArrayScale" || cfg.key === "xOffset" || cfg.key === "yOffset") {
       applyArrayTransform();
+    }
+    if (cfg.key === "extMaskYOffset") {
+      // A plain position nudge on already-live cells -- refresh every clip rect's y
+      // in place rather than a full regen, which would wipe every cell's own gain.
+      updateExtensionClips();
     }
     if (cfg.regen && !opts.skipRegen) {
       regenerateGrid();
