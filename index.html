@@ -539,8 +539,8 @@
     rowSpacing: 61,
     altRowXOffset: 45,
     cumulativeRowOffset: false,
-    extYOffset: -134,
-    extMaskYOffset: 0,
+    extYOffset: -13,
+    extMaskYOffset: -58,
     debugShowExtBoundary: false,
 
     // Built-in "Dev Panel" meta-styling group (CLAUDE.md 12i) -- the panel's own
@@ -569,7 +569,7 @@
     },
     _panelGeometryDesktop: null,
     _panelGeometryMobile: null,
-    _collapsedGroups: []
+    _collapsedGroups: ["devpanel", "grid", "spacing"]
   };
 
   var GROUP_DEFS = [
@@ -676,12 +676,17 @@
   }
 
   var EXT_NATURAL_SVG_HEIGHT = 4690.21; // the bottom-extension symbol's own natural height, in its own SVG user units
-  // EXT_DOME_COVER is where Base/Backing's own drawn artwork actually bottoms out --
-  // NOT the shared 605.11 viewBox height, which both symbols' real getBBox() confirm
-  // they fall ~31 units short of (empty viewBox margin below the true silhouette).
-  // Pinning to 605.11 left exactly that margin's worth of extension visible past
-  // Base's real bottom edge, on every click -- pin to the real bbox bottom instead.
-  var EXT_DOME_COVER = 574.23;
+  // EXT_DOME_COVER pins to where Base/Backing's own drawn artwork STARTS (its bbox
+  // top, ~281.62), not where it bottoms out (~574.23) -- pinning to the bottom edge
+  // still let the extension render through Base's own Y-range, where an isPointInFill
+  // scan confirmed the real silhouette is narrower/tapered than its bounding box (a
+  // point-in-fill scan across several X positions at y=560-573 showed a single band
+  // that visibly narrows as Y approaches the bottom, not a uniform-width rectangle) --
+  // any X position outside that narrower true silhouette showed the extension straight
+  // through, at every gain, no matter how precisely the BOTTOM constant was calibrated.
+  // Stopping at Base's TOP edge means the extension never enters Base's own Y-range at
+  // all, sidestepping the tapered/irregular silhouette entirely regardless of X.
+  var EXT_DOME_COVER = 281.62;
   // CSS transform: translateY(Npx) on an element INSIDE an SVG resolves in that SVG's
   // OWN user units, not literal CSS pixels -- so button-height/gain (fed straight into
   // such a translateY) are already directly in SVG user units here.
@@ -764,8 +769,8 @@
           "</g>" +
           '<use href="#sym-backing" width="589.79" height="605.11"></use>' +
           '<g class="dome-wrap">' +
-          '<use class="dome-up-use" href="#sym-dome-up" width="589.79" height="605.11"></use>' +
-          '<use class="dome-pressed-use" href="#sym-dome-pressed" width="589.79" height="605.11"></use>' +
+          '<use class="dome-up-use" href="#sym-dome-pressed" width="589.79" height="605.11"></use>' +
+          '<use class="dome-pressed-use" href="#sym-dome-up" width="589.79" height="605.11"></use>' +
           "</g>" +
           '<use href="#sym-base" width="589.79" height="605.11"></use>' +
           '<rect class="debug-ext-boundary" x="0" y="0" width="589.79" height="4690.21"></rect>' +
@@ -1115,6 +1120,13 @@
   viewport.addEventListener("pointerdown", function (e) {
     var cell = e.target.closest(".btn-cell");
     if (!cell) return;
+    // Only the button's own top 30px (the dome cap) registers a press -- the SVG's
+    // visible content (including the extension shaft) extends well past the cell's
+    // own div via overflow:visible, and with tightly-packed rows that lower area can
+    // sit on top of a neighboring row's own cell, so a full-height hit zone let clicks
+    // there register against the wrong button (surfacing as cross-cell flashing).
+    var rect = cell.getBoundingClientRect();
+    if (e.clientY > rect.top + 30) return;
     activePointers.set(e.pointerId, cell);
     try { cell.setPointerCapture(e.pointerId); } catch (err) {}
     pressCell(cell);
