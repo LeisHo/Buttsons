@@ -530,8 +530,6 @@
     document.body.classList.add("dev-enabled");
   }
 
-  var STORAGE_KEY = "buttsonsArraySettings";
-
   var DEFAULT_SETTINGS = {
     arrayScale: 1.57,
     mobileArrayScale: 1.58,
@@ -645,19 +643,26 @@
     }
   }
 
+  // The git-tracked settings log (CLAUDE.md 12l) is the only source of saved defaults --
+  // no separate browser-local (localStorage) default alongside it. A GET here just reads
+  // the static JSON file dev_server.py's Save Settings route writes; on a plain static
+  // host, file://, or before the first-ever Save, this 404s/throws and we fall back to
+  // DEFAULT_SETTINGS below rather than silently substituting a local cache.
+  var SETTINGS_LOG_URL = "/data/processed/dev-panel-settings.json";
+
   function loadSavedDefaults() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return deepClone(DEFAULT_SETTINGS);
-      var parsed = JSON.parse(raw);
-      return Object.assign(deepClone(DEFAULT_SETTINGS), parsed);
-    } catch (e) {
-      return deepClone(DEFAULT_SETTINGS);
-    }
+    return fetch(SETTINGS_LOG_URL, { cache: "no-store" })
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (parsed) {
+        return parsed ? Object.assign(deepClone(DEFAULT_SETTINGS), parsed) : deepClone(DEFAULT_SETTINGS);
+      })
+      .catch(function () {
+        return deepClone(DEFAULT_SETTINGS);
+      });
   }
 
-  var savedDefaults = loadSavedDefaults();
-  var settings = deepClone(savedDefaults);
+  var savedDefaults = deepClone(DEFAULT_SETTINGS);
+  var settings = deepClone(DEFAULT_SETTINGS);
 
   var root = document.documentElement;
   var stage = document.getElementById("arrayStage");
@@ -804,8 +809,10 @@
           // Base's own footprint exactly) but painted first -- underneath the
           // extension layers -- per explicit request.
           '<use href="#sym-backing" width="589.79" height="605.11"></use>' +
+          // Only the FRONT extension goes under the mask -- it's the layer that was
+          // bleeding through Base's gaps. The back layer moved below (still sharing the
+          // same clip-path reveal window) so the mask doesn't also erase it.
           '<g class="dome-wrap ext-wrap" clip-path="url(#' + clipId + ')">' +
-          '<use href="#sym-bottom-extension-back" width="589.79" height="4690.21"></use>' +
           '<use href="#sym-bottom-extension" width="589.79" height="4690.21"></use>' +
           "</g>" +
           '<g class="dome-wrap">' +
@@ -814,12 +821,15 @@
           "</g>" +
           // Extension Mask: a real asset (not a clip-path) -- a background-colored shape,
           // static (no transform, anchored by its own authored top edge, same as Backing),
-          // painted over the extension but under Base. Its bottom edge is stretched by JS
-          // (updateExtensionMaskReach) to always reach past the browser's own bottom edge,
-          // so it opaquely erases any extension material below its top regardless of
+          // painted over the FRONT extension but under Base. Its bottom edge is stretched
+          // by JS (updateMaskReach) to always reach past the browser's own bottom edge, so
+          // it opaquely erases any front-extension material below its top regardless of
           // Base's own ring-shaped gaps -- replaces the clip-path approach that failed
           // repeatedly (see ETA History for that history).
           '<polygon class="ext-mask-poly" fill="#14151a" points="60.21 439.34 300.26 448.34 544.34 439.34 544.34 3435.06 60.21 3435.06 60.21 439.34"></polygon>' +
+          // Back extension paints on top of the mask (still under Base), sharing the same
+          // clip-path so it reveals in step with the front layer's press animation.
+          '<use href="#sym-bottom-extension-back" width="589.79" height="4690.21" clip-path="url(#' + clipId + ')"></use>' +
           '<use href="#sym-base" width="589.79" height="605.11"></use>' +
           '<rect class="debug-ext-boundary" x="0" y="0" width="589.79" height="4690.21"></rect>' +
           "</svg>" +
@@ -1233,27 +1243,23 @@
 
   document.getElementById("btnSave").addEventListener("click", function () {
     var btn = this;
-    try {
-      savePanelGeometry();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+    savePanelGeometry();
+    // The git-tracked settings log is the only place Save Settings writes to (CLAUDE.md
+    // 12l) -- no separate localStorage default. Only works when served by dev_server.py
+    // (has the /api/save-settings route); under a plain static host or file:// this
+    // genuinely fails, and "Save failed" reflects that honestly rather than pretending
+    // success via a local-only cache.
+    fetch("/api/save-settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings)
+    }).then(function (res) {
+      if (!res.ok) throw new Error("save failed");
       savedDefaults = deepClone(settings);
       flashButton(btn, "Saved!");
-    } catch (e) {
+    }).catch(function () {
       flashButton(btn, "Save failed");
-      return;
-    }
-    // Best-effort write-through to the git-tracked settings log (CLAUDE.md 12l), so a
-    // desktop Claude Code session working in this repo can see the saved values too --
-    // only works when served by dev_server.py (has the /api/save-settings route); a
-    // plain static host or file:// has nothing to receive this, so failures here are
-    // silent and don't affect the already-successful localStorage save above.
-    try {
-      fetch("/api/save-settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings)
-      }).catch(function () {});
-    } catch (e) {}
+    });
   });
 
   document.getElementById("btnReset").addEventListener("click", function () {
@@ -1398,11 +1404,15 @@
 
   // ---- Init ---- (dev-enabled class already applied at the very top of this script)
   devPanel.classList.add(isMobileActive() ? "tab-mobile" : "tab-desktop");
-  buildPanelContent();
-  initSortable();
-  initPanelDragResize();
-  applyAllSettings();
-  applyPanelGeometry();
+  loadSavedDefaults().then(function (loaded) {
+    savedDefaults = loaded;
+    settings = deepClone(savedDefaults);
+    buildPanelContent();
+    initSortable();
+    initPanelDragResize();
+    applyAllSettings();
+    applyPanelGeometry();
+  });
 })();
 </script>
 </body>
