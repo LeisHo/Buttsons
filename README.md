@@ -17,6 +17,30 @@ an API key, a specific Python/Node version? State it here precisely — this
 is the one doc a new person (or a fresh AI chat) needs to get the thing
 running without guessing.>
 
+### Dev panel settings sync (one-time Vercel setup)
+
+The dev panel's SAVE button writes to `data/processed/dev-panel-settings.json`
+in this repo via `api/save-settings.js` (CLAUDE.md Section 12l); LOAD/RESET
+read it back the same way. Until the two env vars below are set on the
+Vercel project, SAVE reports "Save failed" — expected until this is set up:
+
+1. **`GITHUB_TOKEN`** — a GitHub fine-grained personal access token, scoped
+   to only this repo (`LeisHo/Buttsons`), with **Contents: Read and write**
+   permission and nothing else. Create one at github.com → Settings →
+   Developer settings → Personal access tokens → Fine-grained tokens.
+2. **`DEV_PANEL_SAVE_SECRET`** — an anti-abuse shared token (not a real
+   secret — it also lives in the page's own client-side source, same as any
+   other value there). Set it to the value already embedded in `index.html`'s
+   `DEV_PANEL_SAVE_SECRET` constant — or change both to a new value together
+   if you'd rather generate your own.
+
+Add both under the Vercel project → Settings → Environment Variables, then
+redeploy. `GITHUB_REPO`, `GITHUB_BRANCH`, and `SETTINGS_FILE_PATH` are
+optional overrides (see `api/save-settings.js`) — the defaults already match
+this repo. Claude Code cannot enter these into Vercel's dashboard itself
+(entering API keys/tokens on your behalf is outside what it's allowed to
+do) — this step needs a human.
+
 ## Project structure
 
 ```
