@@ -1232,8 +1232,11 @@
 
       function onMove(ev) {
         var dx = ev.clientX - startX, dy = ev.clientY - startY;
+        // Clamp against the panel's own current full width/height (not a fixed sliver)
+        // so every edge -- including the bottom, and therefore every resize corner --
+        // stays reachable inside the viewport, never just the titlebar.
         var newLeft = Math.max(0, Math.min(window.innerWidth - devPanel.offsetWidth, startLeft + dx));
-        var newTop = Math.max(0, Math.min(window.innerHeight - 30, startTop + dy));
+        var newTop = Math.max(0, Math.min(window.innerHeight - devPanel.offsetHeight, startTop + dy));
         devPanel.style.left = newLeft + "px";
         devPanel.style.top = newTop + "px";
       }
