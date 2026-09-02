@@ -1210,7 +1210,20 @@
       flashButton(btn, "Saved!");
     } catch (e) {
       flashButton(btn, "Save failed");
+      return;
     }
+    // Best-effort write-through to the git-tracked settings log (CLAUDE.md 12l), so a
+    // desktop Claude Code session working in this repo can see the saved values too --
+    // only works when served by dev_server.py (has the /api/save-settings route); a
+    // plain static host or file:// has nothing to receive this, so failures here are
+    // silent and don't affect the already-successful localStorage save above.
+    try {
+      fetch("/api/save-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settings)
+      }).catch(function () {});
+    } catch (e) {}
   });
 
   document.getElementById("btnReset").addEventListener("click", function () {

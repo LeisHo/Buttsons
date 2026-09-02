@@ -4,7 +4,7 @@
     {
       "name": "buttsons",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8937"],
+      "runtimeArgs": ["scripts/active/dev_server.py"],
       "port": 8937
     }
   ]

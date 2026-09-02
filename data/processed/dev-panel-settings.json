@@ -1,0 +1,87 @@
+{
+  "arrayScale": 1.57,
+  "mobileArrayScale": 1.58,
+  "colCount": 16,
+  "rowCount": 10,
+  "buttonHeight": 120,
+  "clickIntensity": 120,
+  "heightGainPerClick": 70,
+  "holdThresholdMs": 500,
+  "releaseMs": 0,
+  "xOffset": 34,
+  "yOffset": 0,
+  "colSpacing": 85,
+  "rowSpacing": 61,
+  "altRowXOffset": 45,
+  "cumulativeRowOffset": false,
+  "extYOffset": -13,
+  "extMaskYOffset": -58,
+  "debugShowExtBoundary": false,
+  "devTitleFontSize": 13,
+  "devTabFontSize": 11.5,
+  "devGroupTitleFontSize": 12,
+  "devSettingTitleFontSize": 12,
+  "devBodyFontSize": 12,
+  "devPanelOpacity": 0.92,
+  "devBgColor": "#0f1014",
+  "devTitleColor": "#9fd3ff",
+  "devTextColor": "#e6e6e6",
+  "_groupOrder": [
+    "devpanel",
+    "grid",
+    "spacing",
+    "press",
+    "debug"
+  ],
+  "_itemOrderByGroup": {
+    "devpanel": [
+      "devTitleFontSize",
+      "devTabFontSize",
+      "devGroupTitleFontSize",
+      "devSettingTitleFontSize",
+      "devBodyFontSize",
+      "devPanelOpacity",
+      "devBgColor",
+      "devTitleColor",
+      "devTextColor"
+    ],
+    "grid": [
+      "arrayScale",
+      "mobileArrayScale",
+      "colCount",
+      "rowCount"
+    ],
+    "spacing": [
+      "xOffset",
+      "yOffset",
+      "colSpacing",
+      "rowSpacing",
+      "altRowXOffset",
+      "cumulativeRowOffset"
+    ],
+    "press": [
+      "buttonHeight",
+      "clickIntensity",
+      "extYOffset",
+      "extMaskYOffset",
+      "heightGainPerClick",
+      "holdThresholdMs",
+      "releaseMs"
+    ],
+    "debug": [
+      "debugShowExtBoundary"
+    ]
+  },
+  "_panelGeometryDesktop": {
+    "top": 12,
+    "left": 968,
+    "width": 300,
+    "height": 600
+  },
+  "_panelGeometryMobile": null,
+  "_collapsedGroups": [
+    "devpanel",
+    "grid",
+    "spacing"
+  ]
+}
