@@ -521,6 +521,15 @@
 (function () {
   "use strict";
 
+  // Enable the dev panel FIRST, before anything else in this script runs -- isDevAllowed()
+  // is a hoisted function declaration so this is safe to call this early. Previously this
+  // check ran at the very end of the whole init sequence, so if anything earlier in the
+  // script threw, the panel never got enabled even though the gating logic itself was fine
+  // (a plausible cause of "no dev panel" reports this script couldn't otherwise reproduce).
+  if (isDevAllowed()) {
+    document.body.classList.add("dev-enabled");
+  }
+
   var STORAGE_KEY = "buttsonsArraySettings";
 
   var DEFAULT_SETTINGS = {
@@ -676,17 +685,13 @@
   }
 
   var EXT_NATURAL_SVG_HEIGHT = 4690.21; // the bottom-extension symbol's own natural height, in its own SVG user units
-  // EXT_DOME_COVER pins to where Base/Backing's own drawn artwork STARTS (its bbox
-  // top, ~281.62), not where it bottoms out (~574.23) -- pinning to the bottom edge
-  // still let the extension render through Base's own Y-range, where an isPointInFill
-  // scan confirmed the real silhouette is narrower/tapered than its bounding box (a
-  // point-in-fill scan across several X positions at y=560-573 showed a single band
-  // that visibly narrows as Y approaches the bottom, not a uniform-width rectangle) --
-  // any X position outside that narrower true silhouette showed the extension straight
-  // through, at every gain, no matter how precisely the BOTTOM constant was calibrated.
-  // Stopping at Base's TOP edge means the extension never enters Base's own Y-range at
-  // all, sidestepping the tapered/irregular silhouette entirely regardless of X.
-  var EXT_DOME_COVER = 281.62;
+  // EXT_DOME_COVER pins to where Base/Backing's own drawn artwork actually bottoms
+  // out (real getBBox() bottom, ~574.23 -- not the 605.11 viewBox height, which both
+  // symbols fall ~31 units short of). Pinning to Base's TOP edge instead (tried and
+  // reverted) avoided Base's own tapered silhouette but disconnected the extension
+  // from Base's visible body entirely, floating it far above -- worse than the
+  // original ask. Back to a simple straight-line mask at Base's real bottom edge.
+  var EXT_DOME_COVER = 574.23;
   // CSS transform: translateY(Npx) on an element INSIDE an SVG resolves in that SVG's
   // OWN user units, not literal CSS pixels -- so button-height/gain (fed straight into
   // such a translateY) are already directly in SVG user units here.
@@ -1120,13 +1125,17 @@
   viewport.addEventListener("pointerdown", function (e) {
     var cell = e.target.closest(".btn-cell");
     if (!cell) return;
-    // Only the button's own top 30px (the dome cap) registers a press -- the SVG's
-    // visible content (including the extension shaft) extends well past the cell's
-    // own div via overflow:visible, and with tightly-packed rows that lower area can
-    // sit on top of a neighboring row's own cell, so a full-height hit zone let clicks
-    // there register against the wrong button (surfacing as cross-cell flashing).
-    var rect = cell.getBoundingClientRect();
-    if (e.clientY > rect.top + 30) return;
+    // Only the dome's own top 30px registers a press -- measured from the dome
+    // artwork's OWN rendered position, not the cell div's top (the SVG's own empty
+    // viewBox margin puts the dome ~13px below the div's top at default settings, so
+    // measuring from the div left most of the visible cap outside a "top 30px" zone
+    // and most clicks landed as misses). The SVG's visible content (including the
+    // extension shaft) also extends well past the cell's own div via overflow:visible,
+    // and with tightly-packed rows that lower area can sit on top of a neighboring
+    // row's own cell, so a full-height hit zone let clicks there register against the
+    // wrong button (surfacing as cross-cell flashing).
+    var domeRect = cell.querySelector(".dome-up-use").getBoundingClientRect();
+    if (e.clientY < domeRect.top || e.clientY > domeRect.top + 30) return;
     activePointers.set(e.pointerId, cell);
     try { cell.setPointerCapture(e.pointerId); } catch (err) {}
     pressCell(cell);
@@ -1330,10 +1339,7 @@
     applyPanelGeometry();
   });
 
-  // ---- Init ----
-  if (isDevAllowed()) {
-    document.body.classList.add("dev-enabled");
-  }
+  // ---- Init ---- (dev-enabled class already applied at the very top of this script)
   devPanel.classList.add(isMobileActive() ? "tab-mobile" : "tab-desktop");
   buildPanelContent();
   initSortable();
