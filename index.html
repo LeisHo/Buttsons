@@ -767,9 +767,12 @@
           '<svg class="cell-svg" viewBox="0 0 589.79 4690.21" preserveAspectRatio="xMinYMin meet">' +
           "<defs><clipPath id=\"" + clipId + "\" clipPathUnits=\"userSpaceOnUse\">" +
           '<rect class="ext-clip-rect" x="0" y="0" width="589.79" height="0"></rect>' +
+          "</clipPath>" +
+          "<clipPath id=\"" + clipId + "-backwidth\" clipPathUnits=\"userSpaceOnUse\">" +
+          '<rect x="70" y="0" width="75" height="4690.21"></rect>' +
           "</clipPath></defs>" +
           '<g class="dome-wrap ext-wrap" clip-path="url(#' + clipId + ')">' +
-          '<use href="#sym-bottom-extension-back" width="589.79" height="4690.21"></use>' +
+          '<use href="#sym-bottom-extension-back" width="589.79" height="4690.21" clip-path="url(#' + clipId + '-backwidth)"></use>' +
           '<use href="#sym-bottom-extension" width="589.79" height="4690.21"></use>' +
           "</g>" +
           '<use href="#sym-backing" width="589.79" height="605.11"></use>' +
@@ -1125,17 +1128,12 @@
   viewport.addEventListener("pointerdown", function (e) {
     var cell = e.target.closest(".btn-cell");
     if (!cell) return;
-    // Only the dome's own top 30px registers a press -- measured from the dome
-    // artwork's OWN rendered position, not the cell div's top (the SVG's own empty
-    // viewBox margin puts the dome ~13px below the div's top at default settings, so
-    // measuring from the div left most of the visible cap outside a "top 30px" zone
-    // and most clicks landed as misses). The SVG's visible content (including the
-    // extension shaft) also extends well past the cell's own div via overflow:visible,
-    // and with tightly-packed rows that lower area can sit on top of a neighboring
-    // row's own cell, so a full-height hit zone let clicks there register against the
-    // wrong button (surfacing as cross-cell flashing).
-    var domeRect = cell.querySelector(".dome-up-use").getBoundingClientRect();
-    if (e.clientY < domeRect.top || e.clientY > domeRect.top + 30) return;
+    // Reverted the "top 30px" hit-zone restriction entirely -- even measured from the
+    // dome's own live position (not the cell div's), it was both too narrow for normal
+    // clicking (~1 in 10 landed) AND a moving target: the dome rises as gain grows, so
+    // a button that was clickable once shifted its own hit-zone up and away, reading as
+    // "can't be clicked anymore" after a single click. Back to the full cell area, which
+    // was reliable before this restriction was introduced.
     activePointers.set(e.pointerId, cell);
     try { cell.setPointerCapture(e.pointerId); } catch (err) {}
     pressCell(cell);
