@@ -538,7 +538,7 @@
     rowSpacing: 61,
     altRowXOffset: 45,
     cumulativeRowOffset: false,
-    extYOffset: 0,
+    extYOffset: 134,
     extMaskYOffset: 0,
     debugShowExtBoundary: false,
     debugShowMaskBoundary: false,
@@ -677,36 +677,30 @@
   }
 
   var EXT_NATURAL_SVG_HEIGHT = 4690.21; // the bottom-extension symbol's own natural height, in its own SVG user units
-  // The dome and the extension share the identical rise transform (translateY by the
-  // same button-height+gain), so the dome -- painted on top -- permanently covers the
-  // extension's own local y 0..EXT_DOME_COVER no matter what gain is (that span just
-  // rises together with the dome, staying hidden underneath it). EXT_DOME_COVER is the
-  // shared Base/Button/Backing viewBox height, since that's exactly the footprint the
-  // dome+base occupy above the extension's own attachment point. Reveal only counts
-  // upward from there so the very first bit of growth is visible beneath the button,
-  // instead of requiring gain > 605.11 (~9 default clicks) before any pixel clears it.
+  // EXT_DOME_COVER is the shared Base/Button/Backing viewBox height -- i.e. exactly
+  // where the base's own bottom edge sits in the shared untransformed frame.
   var EXT_DOME_COVER = 605.11;
-  var EXT_REVEALABLE_HEIGHT = EXT_NATURAL_SVG_HEIGHT - EXT_DOME_COVER;
   // CSS transform: translateY(Npx) on an element INSIDE an SVG resolves in that SVG's
-  // OWN user units, not literal CSS pixels -- so --cell-height-gain (fed straight into
-  // such a translateY) is already directly in SVG user units here.
+  // OWN user units, not literal CSS pixels -- so button-height/gain (fed straight into
+  // such a translateY) are already directly in SVG user units here.
 
-  // The extension is hidden at rest and only revealed as the button grows taller from
-  // repeated clicks -- its visible length tracks accumulated gain 1:1, not the button's
-  // static resting height and not the array's layout position/viewport height (an
-  // earlier, incorrect reading of "the higher it's placed, the more it's revealed" as
-  // being about on-screen array position rather than how far the button has grown).
+  // The extension should only ever be masked BELOW the base -- i.e. visible everywhere
+  // from the dome's current position down to exactly the base's own bottom edge, no
+  // matter how far the button has risen. The clip window always starts at local y=0
+  // and its height is EXT_DOME_COVER plus however far .dome-wrap.ext-wrap's own live
+  // transform has raised the group (button-height + gain + ext-y-offset) -- since that
+  // height is measured in the SAME pre-transform local frame the translate then shifts,
+  // the two cancel out and the clip's bottom edge lands pinned at screen-space
+  // EXT_DOME_COVER (the base's bottom) for any rise amount, so there's never a gap
+  // between where the extension stops and where the base starts. extMaskYOffset is a
+  // small user-tunable fine-adjustment layered on top, to compensate for the raw
+  // artwork's own shape not lining up exactly with the shared viewBox constant.
   function applyClipHeight(cell) {
     var gain = parseFloat(cell.style.getPropertyValue("--cell-height-gain")) || 0;
-    var clipSvgUnits = Math.min(EXT_REVEALABLE_HEIGHT, gain);
+    var riseAmount = settings.buttonHeight + gain + settings.extYOffset;
+    var clipSvgUnits = Math.max(0, Math.min(EXT_NATURAL_SVG_HEIGHT, EXT_DOME_COVER + riseAmount + settings.extMaskYOffset));
     var rect = cell.querySelector(".ext-clip-rect");
-    if (rect) {
-      // extMaskYOffset is a user-tunable fine-adjustment on top of the fixed
-      // EXT_DOME_COVER anchor, letting the boundary be nudged to match the raw
-      // artwork's own shape instead of relying purely on the shared viewBox constant.
-      rect.setAttribute("y", EXT_DOME_COVER + settings.extMaskYOffset);
-      rect.setAttribute("height", clipSvgUnits);
-    }
+    if (rect) rect.setAttribute("height", clipSvgUnits);
   }
 
   // Every cell starts fully hidden (gain 0 on a fresh grid) -- called once per
@@ -760,7 +754,7 @@
           '<div class="btn-cell" style="left:' + x + 'px;top:' + y + 'px" data-r="' + r + '" data-c="' + c + '">' +
           '<svg class="cell-svg" viewBox="0 0 589.79 4690.21" preserveAspectRatio="xMinYMin meet">' +
           "<defs><clipPath id=\"" + clipId + "\" clipPathUnits=\"userSpaceOnUse\">" +
-          '<rect class="ext-clip-rect" x="0" y="' + EXT_DOME_COVER + '" width="589.79" height="0"></rect>' +
+          '<rect class="ext-clip-rect" x="0" y="0" width="589.79" height="0"></rect>' +
           "</clipPath></defs>" +
           '<g class="dome-wrap ext-wrap" clip-path="url(#' + clipId + ')">' +
           '<use href="#sym-bottom-extension" width="589.79" height="4690.21"></use>' +
@@ -802,9 +796,11 @@
     if (cfg.key === "arrayScale" || cfg.key === "mobileArrayScale" || cfg.key === "xOffset" || cfg.key === "yOffset") {
       applyArrayTransform();
     }
-    if (cfg.key === "extMaskYOffset") {
-      // A plain position nudge on already-live cells -- refresh every clip rect's y
-      // in place rather than a full regen, which would wipe every cell's own gain.
+    if (cfg.key === "extMaskYOffset" || cfg.key === "buttonHeight" || cfg.key === "extYOffset") {
+      // All three feed the clip-height formula directly (it must track the exact same
+      // rise amount the live transform uses, so the reveal stays pinned to the base's
+      // bottom edge) -- refresh every clip rect in place rather than a full regen,
+      // which would wipe every cell's own accumulated gain.
       updateExtensionClips();
     }
     if (cfg.regen && !opts.skipRegen) {
