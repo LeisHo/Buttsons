@@ -676,9 +676,12 @@
   }
 
   var EXT_NATURAL_SVG_HEIGHT = 4690.21; // the bottom-extension symbol's own natural height, in its own SVG user units
-  // EXT_DOME_COVER is the shared Base/Button/Backing viewBox height -- i.e. exactly
-  // where the base's own bottom edge sits in the shared untransformed frame.
-  var EXT_DOME_COVER = 605.11;
+  // EXT_DOME_COVER is where Base/Backing's own drawn artwork actually bottoms out --
+  // NOT the shared 605.11 viewBox height, which both symbols' real getBBox() confirm
+  // they fall ~31 units short of (empty viewBox margin below the true silhouette).
+  // Pinning to 605.11 left exactly that margin's worth of extension visible past
+  // Base's real bottom edge, on every click -- pin to the real bbox bottom instead.
+  var EXT_DOME_COVER = 574.23;
   // CSS transform: translateY(Npx) on an element INSIDE an SVG resolves in that SVG's
   // OWN user units, not literal CSS pixels -- so button-height/gain (fed straight into
   // such a translateY) are already directly in SVG user units here.
